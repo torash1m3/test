@@ -4,11 +4,12 @@
   padding: var(--space-8) var(--space-6);
 }
 
+/* Header */
 .builder__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
   flex-wrap: wrap;
   gap: var(--space-4);
 }
@@ -18,6 +19,59 @@
   font-weight: var(--font-weight-bold);
 }
 
+.builder__header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* Build selector */
+.build-selector {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.build-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.build-tab:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+.build-tab--active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-border-accent);
+  color: var(--color-accent-hover);
+}
+
+.build-tab__delete {
+  display: flex;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.build-tab__delete:hover {
+  color: var(--color-error);
+}
+
+/* Layout */
 .builder__layout {
   display: grid;
   grid-template-columns: 1fr 320px;
@@ -25,51 +79,73 @@
   align-items: start;
 }
 
-/* Components Area */
+/* Workspace */
 .builder__workspace {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
 
+/* Category zone */
 .category-zone {
-  min-height: 80px;
-  border: 2px dashed var(--color-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-4);
+  overflow: hidden;
   transition: all var(--transition-base);
   background: var(--color-bg-card);
 }
 
-.category-zone:hover {
-  border-color: var(--color-border-hover);
-}
-
-.category-zone--active {
+.category-zone--over {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
+  box-shadow: var(--shadow-glow);
 }
 
 .category-zone__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(17, 24, 39, 0.4);
 }
 
 .category-zone__title {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-wide);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.category-zone__count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-normal);
+}
+
+.category-zone__price {
+  font-size: var(--font-size-xs);
+  color: var(--color-cyan);
+  font-weight: var(--font-weight-medium);
+}
+
+.category-zone__body {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 48px;
 }
 
 .category-zone__empty {
   text-align: center;
-  padding: var(--space-4);
+  padding: var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
 }
 
 /* Sidebar */
@@ -81,47 +157,99 @@
   gap: var(--space-4);
 }
 
-.sidebar__total {
+/* Price block */
+.price-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.price-total {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
 }
 
-.sidebar__total-label {
+.price-total__label {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
 
-.sidebar__total-value {
+.price-total__value {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
+  background: linear-gradient(135deg, var(--color-accent-hover), var(--color-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.sidebar__progress-bar {
+/* Progress */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.progress__bar {
   width: 100%;
-  height: 8px;
+  height: 6px;
   background: var(--color-bg-tertiary);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
 
-.sidebar__progress-fill {
+.progress__fill {
   height: 100%;
   background: linear-gradient(90deg, var(--color-accent), var(--color-cyan));
   border-radius: var(--radius-full);
   transition: width var(--transition-slow);
 }
 
-.sidebar__progress-label {
+.progress__label {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
-  margin-top: var(--space-2);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Status summary */
+.status-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.status-item__count {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
 }
 
 /* Empty state */
 .builder__empty {
   text-align: center;
   padding: var(--space-16) var(--space-6);
+}
+
+.builder__empty-icon {
+  margin-inline: auto;
+  margin-bottom: var(--space-6);
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-2xl);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
 .builder__empty-title {
@@ -132,8 +260,11 @@
 .builder__empty-desc {
   color: var(--color-text-secondary);
   margin-bottom: var(--space-6);
+  max-width: 400px;
+  margin-inline: auto;
 }
 
+/* Responsive */
 @media (max-width: 900px) {
   .builder__layout {
     grid-template-columns: 1fr;
