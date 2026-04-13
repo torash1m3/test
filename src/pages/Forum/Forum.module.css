@@ -1,0 +1,115 @@
+.forum {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+.forum__header {
+  margin-bottom: var(--space-8);
+}
+
+.forum__title {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-2);
+}
+
+.forum__subtitle {
+  color: var(--color-text-secondary);
+}
+
+/* Tabs */
+.forum__tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-8);
+  width: fit-content;
+}
+
+.forum__tab {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.forum__tab:hover {
+  color: var(--color-text-primary);
+}
+
+.forum__tab--active {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Posts */
+.forum__posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.post__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.post__author {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.post__date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.post__content {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.post__actions {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.post__action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.post__action:hover {
+  color: var(--color-text-primary);
+}
+
+/* Empty */
+.forum__empty {
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+  color: var(--color-text-muted);
+}
+
+.forum__empty-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}

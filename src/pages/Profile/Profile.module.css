@@ -1,0 +1,111 @@
+.profile {
+  max-width: var(--container-narrow);
+  margin-inline: auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+.profile__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-10);
+  position: relative;
+  overflow: hidden;
+}
+
+.profile__hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-cyan));
+  opacity: 0.15;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.profile__name {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin-top: var(--space-4);
+}
+
+.profile__email {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-1);
+}
+
+.profile__joined {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-2);
+}
+
+.profile__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* Sections */
+.profile__section {
+  margin-top: var(--space-8);
+}
+
+.profile__section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.profile__specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.profile__spec-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.profile__spec-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.profile__spec-value {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Not logged in */
+.profile__guest {
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+}
+
+.profile__guest-title {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--space-3);
+}
+
+.profile__guest-desc {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+@media (max-width: 480px) {
+  .profile__specs-grid {
+    grid-template-columns: 1fr;
+  }
+}
