@@ -1,59 +1,198 @@
+/**
+ * NeoForge — Auth Store (Firebase)
+ *
+ * Реальная авторизация через Firebase Auth.
+ * Поддерживает Email/Password и Google Sign-In.
+ */
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  updateProfile,
+} from 'firebase/auth'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 
-const useAuthStore = create(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
+const googleProvider = new GoogleAuthProvider()
 
-      login: (credentials) => {
-        // Mock login — будет заменён на реальный API
-        const mockUser = {
-          id: crypto.randomUUID(),
-          username: credentials.username,
-          email: credentials.email || `${credentials.username}@neoforge.dev`,
-          avatar: null,
-          pcSpecs: null,
-          badges: [],
-          createdAt: new Date().toISOString(),
-        }
-        set({ user: mockUser, isAuthenticated: true })
-      },
+const useAuthStore = create((set, get) => ({
+  user: null,
+  profile: null,
+  loading: true,
+  error: null,
 
-      register: (data) => {
-        const newUser = {
-          id: crypto.randomUUID(),
-          username: data.username,
-          email: data.email,
-          avatar: null,
-          pcSpecs: null,
-          badges: [],
-          createdAt: new Date().toISOString(),
-        }
-        set({ user: newUser, isAuthenticated: true })
-      },
+  /**
+   * Инициализация — слушатель состояния авторизации.
+   * Вызывается один раз при старте приложения.
+   */
+  init: () => {
+    onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Загружаем профиль из Firestore
+        const profile = await get().fetchProfile(firebaseUser.uid)
+        set({
+          user: {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          },
+          profile,
+          loading: false,
+          error: null,
+        })
+      } else {
+        set({ user: null, profile: null, loading: false, error: null })
+      }
+    })
+  },
 
-      logout: () => {
-        set({ user: null, isAuthenticated: false })
-      },
-
-      updateProfile: (updates) => {
-        const currentUser = get().user
-        if (!currentUser) return
-        set({ user: { ...currentUser, ...updates } })
-      },
-
-      updatePcSpecs: (specs) => {
-        const currentUser = get().user
-        if (!currentUser) return
-        set({ user: { ...currentUser, pcSpecs: specs } })
-      },
-    }),
-    {
-      name: 'neoforge-auth',
+  /**
+   * Загрузить профиль из Firestore
+   */
+  fetchProfile: async (uid) => {
+    try {
+      const snap = await getDoc(doc(db, 'users', uid))
+      if (snap.exists()) {
+        return snap.data()
+      }
+      return null
+    } catch {
+      return null
     }
-  )
-)
+  },
+
+  /**
+   * Создать/обновить профиль в Firestore
+   */
+  saveProfile: async (profileData) => {
+    const { user } = get()
+    if (!user) return
+
+    const data = {
+      ...profileData,
+      uid: user.uid,
+      email: user.email,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await setDoc(doc(db, 'users', user.uid), data, { merge: true })
+    set({ profile: { ...get().profile, ...data } })
+  },
+
+  /**
+   * Регистрация по Email/Password
+   */
+  signUp: async (email, password, displayName) => {
+    set({ loading: true, error: null })
+    try {
+      const { user: firebaseUser } = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+
+      // Установить displayName
+      await updateProfile(firebaseUser, { displayName })
+
+      // Создать профиль в Firestore
+      await setDoc(doc(db, 'users', firebaseUser.uid), {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName,
+        nickname: displayName,
+        avatarUrl: '',
+        pcSpecs: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
+      return { success: true }
+    } catch (error) {
+      const message = getErrorMessage(error.code)
+      set({ error: message, loading: false })
+      return { success: false, error: message }
+    }
+  },
+
+  /**
+   * Вход по Email/Password
+   */
+  signIn: async (email, password) => {
+    set({ loading: true, error: null })
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      return { success: true }
+    } catch (error) {
+      const message = getErrorMessage(error.code)
+      set({ error: message, loading: false })
+      return { success: false, error: message }
+    }
+  },
+
+  /**
+   * Вход через Google
+   */
+  signInWithGoogle: async () => {
+    set({ loading: true, error: null })
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const firebaseUser = result.user
+
+      // Создать профиль в Firestore если не существует
+      const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'users', firebaseUser.uid), {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || '',
+          nickname: firebaseUser.displayName || '',
+          avatarUrl: firebaseUser.photoURL || '',
+          pcSpecs: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      }
+
+      return { success: true }
+    } catch (error) {
+      const message = getErrorMessage(error.code)
+      set({ error: message, loading: false })
+      return { success: false, error: message }
+    }
+  },
+
+  /**
+   * Выход
+   */
+  signOut: async () => {
+    await firebaseSignOut(auth)
+    set({ user: null, profile: null })
+  },
+
+  clearError: () => set({ error: null }),
+}))
+
+/**
+ * Человекочитаемые ошибки
+ */
+function getErrorMessage(code) {
+  const map = {
+    'auth/email-already-in-use': 'Этот email уже зарегистрирован',
+    'auth/invalid-email': 'Некорректный email',
+    'auth/weak-password': 'Пароль слишком слабый (мин. 6 символов)',
+    'auth/user-not-found': 'Пользователь не найден',
+    'auth/wrong-password': 'Неверный пароль',
+    'auth/invalid-credential': 'Неверный email или пароль',
+    'auth/too-many-requests': 'Слишком много попыток. Подожди',
+    'auth/popup-closed-by-user': 'Окно авторизации закрыто',
+    'auth/network-request-failed': 'Ошибка сети',
+  }
+  return map[code] || `Ошибка авторизации (${code})`
+}
 
 export default useAuthStore

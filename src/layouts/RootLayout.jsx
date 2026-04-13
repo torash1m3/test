@@ -14,7 +14,8 @@ const NAV_LINKS = [
 
 export default function RootLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, loading } = useAuthStore()
+  const isAuthenticated = !!user
 
   const toggleMobile = () => setMobileOpen((prev) => !prev)
   const closeMobile = () => setMobileOpen(false)
@@ -51,8 +52,8 @@ export default function RootLayout() {
             {isAuthenticated ? (
               <Link to="/profile">
                 <Avatar
-                  src={user?.avatar}
-                  name={user?.username || 'U'}
+                  src={user?.photoURL}
+                  name={user?.displayName || user?.email || 'U'}
                   size="sm"
                 />
               </Link>

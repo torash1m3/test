@@ -6,7 +6,22 @@ import useAuthStore from '@/stores/authStore'
 import styles from './Profile.module.css'
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, profile, loading, signOut } = useAuthStore()
+  const isAuthenticated = !!user
+
+  if (loading) {
+    return (
+      <motion.div
+        className={styles.profile}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className={styles.profile__guest}>
+          <p style={{ color: 'var(--color-text-muted)' }}>Загрузка...</p>
+        </div>
+      </motion.div>
+    )
+  }
 
   if (!isAuthenticated || !user) {
     return (
@@ -28,6 +43,8 @@ export default function ProfilePage() {
     )
   }
 
+  const displayName = user.displayName || profile?.nickname || user.email
+
   return (
     <motion.div
       className={styles.profile}
@@ -38,21 +55,23 @@ export default function ProfilePage() {
       <Card flush>
         <div className={styles.profile__hero}>
           <Avatar
-            src={user.avatar}
-            name={user.username}
+            src={user.photoURL}
+            name={displayName}
             size="xl"
             ring
           />
-          <h1 className={styles.profile__name}>{user.username}</h1>
+          <h1 className={styles.profile__name}>{displayName}</h1>
           <p className={styles.profile__email}>{user.email}</p>
-          <p className={styles.profile__joined}>
-            На платформе с {new Date(user.createdAt).toLocaleDateString('ru-RU')}
-          </p>
+          {profile?.createdAt && (
+            <p className={styles.profile__joined}>
+              На платформе с {new Date(profile.createdAt).toLocaleDateString('ru-RU')}
+            </p>
+          )}
           <div className={styles.profile__actions}>
             <Button variant="secondary" size="sm" icon={Settings}>
               Настройки
             </Button>
-            <Button variant="ghost" size="sm" icon={LogOut} onClick={logout}>
+            <Button variant="ghost" size="sm" icon={LogOut} onClick={signOut}>
               Выйти
             </Button>
           </div>
@@ -65,9 +84,9 @@ export default function ProfilePage() {
           <Monitor size={20} /> Мой компьютер
         </h2>
         <Card>
-          {user.pcSpecs ? (
+          {profile?.pcSpecs ? (
             <div className={styles['profile__specs-grid']}>
-              {Object.entries(user.pcSpecs).map(([key, value]) => (
+              {Object.entries(profile.pcSpecs).map(([key, value]) => (
                 <div key={key} className={styles['profile__spec-item']}>
                   <span className={styles['profile__spec-label']}>{key}</span>
                   <span className={styles['profile__spec-value']}>{value}</span>
