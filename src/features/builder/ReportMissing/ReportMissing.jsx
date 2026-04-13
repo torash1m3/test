@@ -9,22 +9,29 @@ const categoryOptions = Object.entries(CATEGORY_SCHEMAS).map(([key, val]) => ({
   label: val.label,
 }))
 
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import useAuthStore from '@/stores/authStore'
+
 /**
- * Заглушка — сохраняет репорт в localStorage.
- * Когда подключим Firebase, заменим на запись в Firestore.
+ * Сохранить репорт в Firestore (/reports)
  */
-function saveReport(report) {
-  const reports = JSON.parse(localStorage.getItem('neoforge-reports') || '[]')
-  reports.push({
-    ...report,
-    id: crypto.randomUUID(),
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  })
-  localStorage.setItem('neoforge-reports', JSON.stringify(reports))
+async function saveReport(report, user) {
+  try {
+    await addDoc(collection(db, 'reports'), {
+      ...report,
+      status: 'pending',
+      authorId: user?.uid || 'anonymous',
+      authorName: user?.displayName || user?.email || 'Гость',
+      createdAt: serverTimestamp(),
+    })
+  } catch (err) {
+    console.error('Ошибка отправки репорта:', err)
+  }
 }
 
 export default function ReportMissing() {
+  const { user } = useAuthStore()
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
   const [form, setForm] = useState({
@@ -33,11 +40,11 @@ export default function ReportMissing() {
     description: '',
   })
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.componentName.trim()) return
 
-    saveReport(form)
+    await saveReport(form, user)
     setSent(true)
 
     setTimeout(() => {
@@ -95,6 +102,7 @@ export default function ReportMissing() {
               value={form.componentName}
               onChange={(e) => setForm((p) => ({ ...p, componentName: e.target.value }))}
               required
+              maxLength={100}
             />
             <Select
               label="Категория"
@@ -108,6 +116,7 @@ export default function ReportMissing() {
               placeholder="Ссылка на характеристики, комментарий..."
               value={form.description}
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              maxLength={1000}
             />
           </form>
         )}

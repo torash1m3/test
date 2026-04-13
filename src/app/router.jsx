@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router'
 import RootLayout from '@/layouts/RootLayout'
+import ProtectedRoute from './ProtectedRoute'
 
 // Lazy-loaded pages — грузятся только по требованию
 const Home = lazy(() => import('@/pages/Home/Home'))
@@ -37,9 +38,9 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { index: true, element: <LazyPage Component={Home} /> },
-      { path: 'builder', element: <LazyPage Component={Builder} /> },
+      { path: 'builder', element: <ProtectedRoute><LazyPage Component={Builder} /></ProtectedRoute> },
       { path: 'forum', element: <LazyPage Component={Forum} /> },
-      { path: 'profile', element: <LazyPage Component={Profile} /> },
+      { path: 'profile', element: <ProtectedRoute><LazyPage Component={Profile} /></ProtectedRoute> },
       { path: 'auth', element: <LazyPage Component={Auth} /> },
       { path: '*', element: <LazyPage Component={NotFound} /> },
     ],

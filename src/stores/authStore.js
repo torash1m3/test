@@ -16,6 +16,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
+import useBuilderStore from './builderStore'
 
 const googleProvider = new GoogleAuthProvider()
 
@@ -32,7 +33,6 @@ const useAuthStore = create((set, get) => ({
   init: () => {
     onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Загружаем профиль из Firestore
         const profile = await get().fetchProfile(firebaseUser.uid)
         set({
           user: {
@@ -45,8 +45,14 @@ const useAuthStore = create((set, get) => ({
           loading: false,
           error: null,
         })
+
+        // Синхронизация сборок с Firestore
+        const builder = useBuilderStore.getState()
+        await builder.migrateLocalBuilds(firebaseUser.uid)
+        builder.subscribeToBuilds(firebaseUser.uid)
       } else {
         set({ user: null, profile: null, loading: false, error: null })
+        useBuilderStore.getState().unsubscribeFromBuilds()
       }
     })
   },
@@ -170,6 +176,7 @@ const useAuthStore = create((set, get) => ({
    * Выход
    */
   signOut: async () => {
+    useBuilderStore.getState().unsubscribeFromBuilds()
     await firebaseSignOut(auth)
     set({ user: null, profile: null })
   },

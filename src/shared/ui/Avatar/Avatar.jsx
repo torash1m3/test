@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import styles from './Avatar.module.css'
 
 export default function Avatar({
@@ -8,11 +9,19 @@ export default function Avatar({
   ring = false,
   className = '',
 }) {
+  const [imgError, setImgError] = useState(false)
+
+  // Сброс ошибки при смене src
+  useEffect(() => {
+    setImgError(false)
+  }, [src])
+
   const initials = name
     .split(' ')
     .map((w) => w[0])
     .join('')
     .slice(0, 2)
+    .toUpperCase()
 
   const classes = [
     styles.avatar,
@@ -25,7 +34,11 @@ export default function Avatar({
 
   return (
     <div className={classes} title={name || alt}>
-      {src ? <img src={src} alt={alt || name} /> : initials}
+      {src && !imgError ? (
+        <img src={src} alt={alt || name} onError={() => setImgError(true)} />
+      ) : (
+        initials || '?'
+      )}
     </div>
   )
 }

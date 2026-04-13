@@ -104,8 +104,26 @@
   margin-bottom: var(--space-6);
 }
 
+/* Edit mode */
+.profile__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 360px;
+  margin-top: var(--space-4);
+}
+
+.profile__edit_actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
 @media (max-width: 480px) {
   .profile__specs-grid {
     grid-template-columns: 1fr;
   }
 }
+

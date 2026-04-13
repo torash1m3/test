@@ -1,16 +1,56 @@
+/**
+ * NeoForge — Builder Store (Firestore-synced)
+ *
+ * Сборки синхронизируются с Firestore когда пользователь залогинен.
+ * Для неавторизованных — fallback в localStorage.
+ */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { CATEGORY_SCHEMAS } from '@/features/builder/schemas'
 
 const COMPONENT_STATUSES = ['planned', 'ordered', 'purchased', 'delivered']
-
 const CATEGORIES = Object.keys(CATEGORY_SCHEMAS)
+
+/**
+ * Сохранить сборку в Firestore
+ */
+async function saveBuildToFirestore(uid, build) {
+  if (!uid) return
+  try {
+    await setDoc(doc(db, 'users', uid, 'builds', build.id), build)
+  } catch (e) {
+    console.error('Firestore save error:', e)
+  }
+}
+
+/**
+ * Удалить сборку из Firestore
+ */
+async function deleteBuildFromFirestore(uid, buildId) {
+  if (!uid) return
+  try {
+    await deleteDoc(doc(db, 'users', uid, 'builds', buildId))
+  } catch (e) {
+    console.error('Firestore delete error:', e)
+  }
+}
 
 const useBuilderStore = create(
   persist(
     (set, get) => ({
       builds: [],
       activeBuildId: null,
+      _uid: null,
+      _unsubscribe: null,
 
       categories: CATEGORIES,
 
@@ -18,8 +58,80 @@ const useBuilderStore = create(
         CATEGORIES.map((key) => [key, CATEGORY_SCHEMAS[key].label])
       ),
 
+      // ──── Firestore Sync ────
+
+      /**
+       * Подписаться на сборки пользователя в Firestore.
+       * Вызывается из authStore при логине.
+       */
+      subscribeToBuilds: (uid) => {
+        // Отписаться от предыдущего
+        const prev = get()._unsubscribe
+        if (prev) prev()
+
+        if (!uid) {
+          set({ _uid: null, _unsubscribe: null })
+          return
+        }
+
+        const ref = collection(db, 'users', uid, 'builds')
+        const unsubscribe = onSnapshot(ref, (snapshot) => {
+          const builds = snapshot.docs.map((d) => d.data())
+          // Сортировка по дате создания
+          builds.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+          set({ builds })
+        })
+
+        set({ _uid: uid, _unsubscribe: unsubscribe })
+      },
+
+      /**
+       * Отписаться (при логауте)
+       */
+      unsubscribeFromBuilds: () => {
+        const unsub = get()._unsubscribe
+        if (unsub) unsub()
+        set({ builds: [], activeBuildId: null, _uid: null, _unsubscribe: null })
+      },
+
+      /**
+       * Мигрировать локальные сборки в Firestore (с умным слиянием)
+       */
+      migrateLocalBuilds: async (uid) => {
+        const { builds } = get()
+        if (builds.length === 0) return
+
+        // Загрузить облачные сборки
+        const ref = collection(db, 'users', uid, 'builds')
+        const snapshot = await getDocs(ref)
+        const cloudBuilds = snapshot.docs.map(d => d.data())
+        const cloudNames = new Set(cloudBuilds.map(b => b.name))
+
+        // Мигрировать
+        for (const localBuild of builds) {
+          // Если сборка с таким ID уже есть в облаке — пропускаем (уже смигрирована)
+          if (cloudBuilds.some(cb => cb.id === localBuild.id)) continue
+
+          let newName = localBuild.name
+          let counter = 1
+          while (cloudNames.has(newName)) {
+            newName = `${localBuild.name}_${counter}`
+            counter++
+          }
+
+          const buildToSave = { ...localBuild, name: newName }
+          await saveBuildToFirestore(uid, buildToSave)
+          cloudNames.add(newName)
+        }
+
+        // Очистить локальные сборки после успешной миграции,
+        // чтобы они не висели мертвым грузом в localStorage (они теперь в облаке).
+        set({ builds: [], activeBuildId: null })
+      },
+
       // ──── Build CRUD ────
       createBuild: (name) => {
+        const uid = get()._uid
         const build = {
           id: crypto.randomUUID(),
           name,
@@ -31,30 +143,42 @@ const useBuilderStore = create(
           builds: [...state.builds, build],
           activeBuildId: build.id,
         }))
+        saveBuildToFirestore(uid, build)
         return build.id
       },
 
       deleteBuild: (buildId) => {
+        const uid = get()._uid
         set((state) => ({
           builds: state.builds.filter((b) => b.id !== buildId),
           activeBuildId:
             state.activeBuildId === buildId ? null : state.activeBuildId,
         }))
+        deleteBuildFromFirestore(uid, buildId)
       },
 
       renameBuild: (buildId, name) => {
+        const uid = get()._uid
         set((state) => ({
           builds: state.builds.map((b) =>
             b.id === buildId ? { ...b, name, updatedAt: new Date().toISOString() } : b
           ),
         }))
+        const build = get().builds.find((b) => b.id === buildId)
+        if (build) saveBuildToFirestore(uid, build)
       },
 
       setActiveBuild: (buildId) => {
         set({ activeBuildId: buildId })
       },
 
-      // ──── Component CRUD ────
+      // ──── Component CRUD (+ auto-save) ────
+      _saveCurrent: (buildId) => {
+        const uid = get()._uid
+        const build = get().builds.find((b) => b.id === buildId)
+        if (build) saveBuildToFirestore(uid, build)
+      },
+
       addComponent: (buildId, component) => {
         const newComponent = {
           id: crypto.randomUUID(),
@@ -77,6 +201,7 @@ const useBuilderStore = create(
               : b
           ),
         }))
+        get()._saveCurrent(buildId)
         return newComponent.id
       },
 
@@ -94,6 +219,7 @@ const useBuilderStore = create(
               : b
           ),
         }))
+        get()._saveCurrent(buildId)
       },
 
       removeComponent: (buildId, componentId) => {
@@ -108,6 +234,7 @@ const useBuilderStore = create(
               : b
           ),
         }))
+        get()._saveCurrent(buildId)
       },
 
       cycleComponentStatus: (buildId, componentId) => {
@@ -126,6 +253,7 @@ const useBuilderStore = create(
             }
           }),
         }))
+        get()._saveCurrent(buildId)
       },
 
       moveComponent: (buildId, activeId, overId) => {
@@ -141,6 +269,7 @@ const useBuilderStore = create(
             return { ...b, components, updatedAt: new Date().toISOString() }
           }),
         }))
+        get()._saveCurrent(buildId)
       },
 
       moveComponentToCategory: (buildId, componentId, newCategory) => {
@@ -157,6 +286,7 @@ const useBuilderStore = create(
               : b
           ),
         }))
+        get()._saveCurrent(buildId)
       },
 
       // ──── Selectors ────
@@ -206,6 +336,11 @@ const useBuilderStore = create(
     }),
     {
       name: 'neoforge-builder',
+      // Не сохраняем служебные поля в localStorage
+      partialize: (state) => ({
+        builds: state.builds,
+        activeBuildId: state.activeBuildId,
+      }),
     }
   )
 )
