@@ -18,6 +18,15 @@ import { db } from '@/lib/firebase'
 import { CATEGORY_SCHEMAS } from '@/features/builder/schemas'
 
 const COMPONENT_STATUSES = ['planned', 'ordered', 'purchased', 'delivered']
+
+/** Вес статуса для прогресс-бара */
+const STATUS_WEIGHT = {
+  planned: 0,
+  ordered: 0.25,
+  purchased: 0.5,
+  delivered: 1.0,
+}
+
 const CATEGORIES = Object.keys(CATEGORY_SCHEMAS)
 
 /**
@@ -237,7 +246,11 @@ const useBuilderStore = create(
         get()._saveCurrent(buildId)
       },
 
-      cycleComponentStatus: (buildId, componentId) => {
+      /**
+       * Установить конкретный статус компонента (вместо цикличного переключения)
+       */
+      setComponentStatus: (buildId, componentId, newStatus) => {
+        if (!COMPONENT_STATUSES.includes(newStatus)) return
         set((state) => ({
           builds: state.builds.map((b) => {
             if (b.id !== buildId) return b
@@ -245,46 +258,11 @@ const useBuilderStore = create(
               ...b,
               components: b.components.map((c) => {
                 if (c.id !== componentId) return c
-                const currentIdx = COMPONENT_STATUSES.indexOf(c.status)
-                const nextIdx = (currentIdx + 1) % COMPONENT_STATUSES.length
-                return { ...c, status: COMPONENT_STATUSES[nextIdx] }
+                return { ...c, status: newStatus }
               }),
               updatedAt: new Date().toISOString(),
             }
           }),
-        }))
-        get()._saveCurrent(buildId)
-      },
-
-      moveComponent: (buildId, activeId, overId) => {
-        set((state) => ({
-          builds: state.builds.map((b) => {
-            if (b.id !== buildId) return b
-            const components = [...b.components]
-            const fromIndex = components.findIndex((c) => c.id === activeId)
-            const toIndex = components.findIndex((c) => c.id === overId)
-            if (fromIndex === -1 || toIndex === -1) return b
-            const [moved] = components.splice(fromIndex, 1)
-            components.splice(toIndex, 0, moved)
-            return { ...b, components, updatedAt: new Date().toISOString() }
-          }),
-        }))
-        get()._saveCurrent(buildId)
-      },
-
-      moveComponentToCategory: (buildId, componentId, newCategory) => {
-        set((state) => ({
-          builds: state.builds.map((b) =>
-            b.id === buildId
-              ? {
-                  ...b,
-                  components: b.components.map((c) =>
-                    c.id === componentId ? { ...c, category: newCategory } : c
-                  ),
-                  updatedAt: new Date().toISOString(),
-                }
-              : b
-          ),
         }))
         get()._saveCurrent(buildId)
       },
@@ -315,13 +293,18 @@ const useBuilderStore = create(
           .reduce((sum, c) => sum + (c.price || 0), 0)
       },
 
+      /**
+       * Прогресс сборки — взвешенный по статусам.
+       * planned=0%, ordered=25%, purchased=50%, delivered=100%
+       */
       getProgress: (buildId) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build || build.components.length === 0) return 0
-        const delivered = build.components.filter(
-          (c) => c.status === 'delivered'
-        ).length
-        return Math.round((delivered / build.components.length) * 100)
+        const totalWeight = build.components.reduce(
+          (sum, c) => sum + (STATUS_WEIGHT[c.status] || 0),
+          0
+        )
+        return Math.round((totalWeight / build.components.length) * 100)
       },
 
       getStatusCounts: (buildId) => {

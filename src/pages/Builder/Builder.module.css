@@ -95,6 +95,20 @@
   background: var(--color-bg-card);
 }
 
+.category-zone--collapsed {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--transition-base);
+}
+
+.category-zone--collapsed:hover {
+  opacity: 0.9;
+}
+
+.category-zone--collapsed .category-zone__header {
+  border-bottom: none;
+}
+
 .category-zone--over {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);

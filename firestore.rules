@@ -3,58 +3,117 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ══════════════════════════════════════════
     // Профили пользователей
+    // ══════════════════════════════════════════
     match /users/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId
-                   && (!("pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
-                   && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50);
+
+      // Создание профиля — только свой, с дефолтной ролью
+      allow create: if request.auth != null && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly([
+                      'uid','email','displayName','nickname','avatarUrl',
+                      'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
+                    ])
+                    && request.resource.data.role == 'user'
+                    && (!(  "pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
+                    && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50)
+                    && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
+                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30);
+
+      // Обновление — только свой, нельзя менять role/uid/email
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly([
+                      'uid','email','displayName','nickname','avatarUrl',
+                      'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
+                    ])
+                    // Запрещаем менять критические поля
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.email == resource.data.email
+                    // Лимиты
+                    && (!("pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
+                    && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50)
+                    && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
+                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30);
+
+      allow delete: if false;
     }
 
+    // ══════════════════════════════════════════
     // Сборки
+    // ══════════════════════════════════════════
     match /users/{userId}/builds/{buildId} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // База комплектующих
+    // ══════════════════════════════════════════
+    // База комплектующих (read-only)
+    // ══════════════════════════════════════════
     match /components/{category}/{docId} {
       allow read: if true;
       allow write: if false;
     }
 
+    // ══════════════════════════════════════════
     // Репорты
+    // ══════════════════════════════════════════
     match /reports/{reportId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null 
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.componentName is string
                     && request.resource.data.componentName.size() <= 100
+                    && request.resource.data.description is string
                     && request.resource.data.description.size() <= 1000;
       allow update, delete: if false;
     }
 
+    // ══════════════════════════════════════════
     // Форум — посты
+    // ══════════════════════════════════════════
     match /forum/{postId} {
       allow read: if true;
-      
-      allow create: if request.auth != null 
+
+      allow create: if request.auth != null
+                    // Автор = текущий юзер
+                    && request.resource.data.authorId == request.auth.uid
+                    // Обязательные поля и типы
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() > 0
                     && request.resource.data.title.size() <= 100
-                    && request.resource.data.content.size() <= 5000;
-      
-      // Обновлять может либо автор (разрешаем всё для будущих эдитов), 
-      // либо любой авторизованный юзер, но СТРОГО только поля лайков и счетчика комментов.
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() > 0
+                    && request.resource.data.content.size() <= 5000
+                    && request.resource.data.likedBy is list
+                    && request.resource.data.likedBy.size() == 0
+                    && request.resource.data.commentCount == 0;
+
+      // Обновлять может:
+      // - автор (все поля кроме authorId)
+      // - любой залогиненный юзер, но СТРОГО только лайки и счётчик комментов
       allow update: if request.auth != null && (
-        request.auth.uid == resource.data.authorId ||
+        (request.auth.uid == resource.data.authorId
+          && request.resource.data.authorId == resource.data.authorId)
+        ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount', 'likedBy'])
       );
-      
+
       allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
 
-      // Подколлекция комментариев
+      // ── Подколлекция комментариев ──
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if request.auth != null 
+        allow create: if request.auth != null
+                      && request.resource.data.authorId == request.auth.uid
+                      && request.resource.data.content is string
+                      && request.resource.data.content.size() > 0
                       && request.resource.data.content.size() <= 2000;
-        allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+        allow update: if request.auth != null
+                      && request.auth.uid == resource.data.authorId
+                      && request.resource.data.authorId == resource.data.authorId;
+        allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
       }
     }
   }

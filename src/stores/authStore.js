@@ -47,9 +47,10 @@ const useAuthStore = create((set, get) => ({
         })
 
         // Синхронизация сборок с Firestore
+        // Сначала подписка — snapshot подхватит данные после миграции автоматически
         const builder = useBuilderStore.getState()
-        await builder.migrateLocalBuilds(firebaseUser.uid)
         builder.subscribeToBuilds(firebaseUser.uid)
+        await builder.migrateLocalBuilds(firebaseUser.uid)
       } else {
         set({ user: null, profile: null, loading: false, error: null })
         useBuilderStore.getState().unsubscribeFromBuilds()
@@ -113,6 +114,9 @@ const useAuthStore = create((set, get) => ({
         nickname: displayName,
         avatarUrl: '',
         pcSpecs: '',
+        bio: '',
+        socialLinks: { telegram: '', vk: '' },
+        role: 'user',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
@@ -159,6 +163,9 @@ const useAuthStore = create((set, get) => ({
           nickname: firebaseUser.displayName || '',
           avatarUrl: firebaseUser.photoURL || '',
           pcSpecs: '',
+          bio: '',
+          socialLinks: { telegram: '', vk: '' },
+          role: 'user',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })

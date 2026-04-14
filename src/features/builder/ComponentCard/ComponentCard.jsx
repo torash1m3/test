@@ -1,39 +1,22 @@
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Trash2, StickyNote } from 'lucide-react'
-import { StatusBadge } from '@/shared/ui'
+import { Trash2, StickyNote } from 'lucide-react'
 import styles from './ComponentCard.module.css'
+
+const STATUSES = [
+  { key: 'planned', label: 'Планирую', color: 'var(--color-text-muted)' },
+  { key: 'ordered', label: 'Заказано', color: 'var(--color-info, #3b82f6)' },
+  { key: 'purchased', label: 'Куплено', color: 'var(--color-warning, #f59e0b)' },
+  { key: 'delivered', label: 'Доставлено', color: 'var(--color-success, #22c55e)' },
+]
 
 export default function ComponentCard({
   component,
-  onStatusClick,
+  onStatusChange,
   onDelete,
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: component.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
+  const currentIdx = STATUSES.findIndex((s) => s.key === component.status)
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`${styles.card} ${isDragging ? styles['card--dragging'] : ''}`}
-    >
-      {/* Drag handle */}
-      <div className={styles['drag-handle']} {...attributes} {...listeners}>
-        <GripVertical size={16} />
-      </div>
-
+    <div className={styles.card}>
       {/* Info */}
       <div className={styles.info}>
         <div className={styles.name} title={component.name}>
@@ -53,12 +36,26 @@ export default function ComponentCard({
         </div>
       </div>
 
-      {/* Status */}
-      <StatusBadge
-        status={component.status}
-        clickable
-        onClick={() => onStatusClick(component.id)}
-      />
+      {/* Stepper */}
+      <div className={styles.stepper}>
+        {STATUSES.map((s, idx) => {
+          const isActive = idx <= currentIdx
+          const isCurrent = idx === currentIdx
+          return (
+            <button
+              key={s.key}
+              className={`${styles.stepper__dot} ${isActive ? styles['stepper__dot--active'] : ''} ${isCurrent ? styles['stepper__dot--current'] : ''}`}
+              style={isActive ? { '--dot-color': s.color } : undefined}
+              onClick={() => onStatusChange(component.id, s.key)}
+              title={s.label}
+              aria-label={s.label}
+            />
+          )
+        })}
+        <span className={styles.stepper__label}>
+          {STATUSES[currentIdx]?.label}
+        </span>
+      </div>
 
       {/* Delete */}
       <button

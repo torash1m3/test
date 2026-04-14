@@ -133,26 +133,111 @@ const RULES = [
         return { status: 'warning', message: 'Не хватает данных о TDP/мощности' }
       }
 
-      // Рекомендуемый запас — 20%
-      const recommended = Math.ceil(totalTdp * 1.2)
+      // Системный overhead: RAM, storage, fans, USB, etc.
+      const SYSTEM_OVERHEAD = 100
+      const totalWithOverhead = totalTdp + SYSTEM_OVERHEAD
+      // Рекомендуемый запас — 30%
+      const recommended = Math.ceil(totalWithOverhead * 1.3)
 
-      if (psuWattage < totalTdp) {
+      if (psuWattage < totalWithOverhead) {
         return {
           status: 'error',
-          message: `БП (${psuWattage}Вт) слабее суммарного TDP (${totalTdp}Вт)!`,
+          message: `БП (${psuWattage}Вт) слабее потребления системы (~${totalWithOverhead}Вт с учётом прочих компонентов)!`,
         }
       }
 
       if (psuWattage < recommended) {
         return {
           status: 'warning',
-          message: `БП (${psuWattage}Вт) хватает впритык. Рекомендуется ≥${recommended}Вт`,
+          message: `БП (${psuWattage}Вт) хватает впритык. Рекомендуется ≥${recommended}Вт (${totalWithOverhead}Вт + 30% запас)`,
         }
       }
 
       return {
         status: 'pass',
-        message: `Запас мощности ОК: ${psuWattage}Вт vs ${totalTdp}Вт TDP`,
+        message: `Запас мощности ОК: ${psuWattage}Вт vs ~${totalWithOverhead}Вт потребления`,
+      }
+    },
+  },
+
+  // ─── Длина GPU ↔ Корпус ───
+  {
+    id: 'gpu-case-length',
+    name: 'Длина GPU ↔ Корпус',
+    check: (components) => {
+      const gpus = findByCategory(components, 'gpu')
+      const cases = findByCategory(components, 'case')
+
+      if (gpus.length === 0 || cases.length === 0) {
+        return { status: 'pass', message: 'Не хватает данных для проверки' }
+      }
+
+      const gpuLength = Number(getAttr(gpus[0], 'length')) || 0
+      const maxGpuLength = Number(getAttr(cases[0], 'maxGpuLength')) || 0
+
+      if (gpuLength === 0 || maxGpuLength === 0) {
+        return { status: 'warning', message: 'Не указана длина GPU или макс. длина корпуса' }
+      }
+
+      if (gpuLength > maxGpuLength) {
+        return {
+          status: 'error',
+          message: `GPU (${gpuLength}мм) не влезет в корпус (макс. ${maxGpuLength}мм)!`,
+        }
+      }
+
+      const margin = maxGpuLength - gpuLength
+      if (margin < 10) {
+        return {
+          status: 'warning',
+          message: `GPU (${gpuLength}мм) влезает в корпус (${maxGpuLength}мм), но запас всего ${margin}мм — впритык`,
+        }
+      }
+
+      return {
+        status: 'pass',
+        message: `GPU (${gpuLength}мм) влезает: запас ${margin}мм`,
+      }
+    },
+  },
+
+  // ─── Охлаждение ↔ TDP процессора ───
+  {
+    id: 'cooling-cpu-tdp',
+    name: 'Охлаждение ↔ TDP процессора',
+    check: (components) => {
+      const cpus = findByCategory(components, 'cpu')
+      const coolers = findByCategory(components, 'cooling')
+
+      if (cpus.length === 0 || coolers.length === 0) {
+        return { status: 'pass', message: 'Не хватает данных для проверки' }
+      }
+
+      const cpuTdp = Number(getAttr(cpus[0], 'tdp')) || 0
+      const coolerTdp = Number(getAttr(coolers[0], 'tdpSupport')) || 0
+
+      if (cpuTdp === 0 || coolerTdp === 0) {
+        return { status: 'warning', message: 'Не указан TDP у процессора или кулера' }
+      }
+
+      if (coolerTdp < cpuTdp) {
+        return {
+          status: 'error',
+          message: `Кулер (${coolerTdp}Вт) не справится с процессором (${cpuTdp}Вт TDP)!`,
+        }
+      }
+
+      const margin = Math.round((coolerTdp / cpuTdp - 1) * 100)
+      if (margin < 20) {
+        return {
+          status: 'warning',
+          message: `Кулер (${coolerTdp}Вт) справится, но запас всего ${margin}% — рекомендуется ≥20%`,
+        }
+      }
+
+      return {
+        status: 'pass',
+        message: `Кулер ОК: ${coolerTdp}Вт vs ${cpuTdp}Вт CPU (запас ${margin}%)`,
       }
     },
   },

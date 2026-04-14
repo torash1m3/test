@@ -233,12 +233,6 @@ export const CATEGORY_SCHEMAS = {
     ],
   },
 
-  peripherals: {
-    label: 'Периферия',
-    icon: 'mouse',
-    attrs: [],
-  },
-
   other: {
     label: 'Другое',
     icon: 'package',
