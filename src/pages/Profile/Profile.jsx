@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import { Monitor, Settings, LogOut, Save, X } from 'lucide-react'
@@ -19,19 +19,17 @@ export default function ProfilePage() {
     pcSpecs: '',
   })
 
-  // Sync form with profile
-  useEffect(() => {
-    if (profile) {
-      setForm({
-        nickname: profile.nickname || profile.displayName || '',
-        avatarUrl: profile.avatarUrl || '',
-        pcSpecs: profile.pcSpecs || '',
-      })
-    }
-  }, [profile])
-
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
+  }
+
+  const handleStartEditing = () => {
+    setForm({
+      nickname: profile?.nickname || profile?.displayName || '',
+      avatarUrl: profile?.avatarUrl || '',
+      pcSpecs: profile?.pcSpecs || '',
+    })
+    setEditing(true)
   }
 
   const handleSave = async () => {
@@ -145,7 +143,7 @@ export default function ProfilePage() {
                 </p>
               )}
               <div className={styles.profile__actions}>
-                <Button variant="secondary" size="sm" icon={Settings} onClick={() => setEditing(true)}>
+                <Button variant="secondary" size="sm" icon={Settings} onClick={handleStartEditing}>
                   Редактировать
                 </Button>
                 <Button variant="ghost" size="sm" icon={LogOut} onClick={handleSignOut}>
@@ -185,7 +183,7 @@ export default function ProfilePage() {
                 Ты ещё не добавил характеристики своего ПК.
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+                <Button variant="secondary" size="sm" onClick={handleStartEditing}>
                   Указать характеристики
                 </Button>
               </div>

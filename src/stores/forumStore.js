@@ -66,10 +66,10 @@ const useForumStore = create((set, get) => ({
   createPost: async ({ section, title, content, authorId, authorName }) => {
     await addDoc(FORUM_REF, {
       section: section || 'chat',
-      title: title || '',
-      content,
+      title: (title || '').trim(),
+      content: content.trim(),
       authorId,
-      authorName,
+      authorName: authorName.trim(),
       commentCount: 0,
       likedBy: [],
       createdAt: serverTimestamp(),
@@ -87,9 +87,9 @@ const useForumStore = create((set, get) => ({
     // Пишем в подколлекцию
     const commentsRef = collection(db, 'forum', postId, 'comments')
     await addDoc(commentsRef, {
-      content,
+      content: content.trim(),
       authorId,
-      authorName,
+      authorName: authorName.trim(),
       createdAt: serverTimestamp()
     })
     // Увеличиваем счетчик в самом посте

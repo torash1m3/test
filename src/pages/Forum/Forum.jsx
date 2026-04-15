@@ -12,12 +12,13 @@ const TAB_ICONS = {
 }
 
 export default function ForumPage() {
-  const { sections, sectionLabels, posts, loading, subscribe, unsubscribe, createPost, deletePost, toggleLike, addComment, fetchComments, getPostsBySection } = useForumStore()
+  const { sections, sectionLabels, loading, subscribe, unsubscribe, createPost, deletePost, toggleLike, addComment, fetchComments, getPostsBySection } = useForumStore()
   const { user } = useAuthStore()
   const [activeSection, setActiveSection] = useState('news')
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ title: '', content: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [actionError, setActionError] = useState('')
   
   // Комментарии и раскрытые посты
   const [commentText, setCommentText] = useState({})
@@ -37,25 +38,41 @@ export default function ForumPage() {
     e.preventDefault()
     if (!form.content.trim() || !user) return
     setSubmitting(true)
-    await createPost({
-      section: activeSection,
-      title: form.title.trim(),
-      content: form.content.trim(),
-      authorId: user.uid,
-      authorName: user.displayName || user.email,
-    })
-    setForm({ title: '', content: '' })
-    setShowCreate(false)
-    setSubmitting(false)
+    setActionError('')
+    try {
+      await createPost({
+        section: activeSection,
+        title: form.title.trim(),
+        content: form.content.trim(),
+        authorId: user.uid,
+        authorName: user.displayName || user.email,
+      })
+      setForm({ title: '', content: '' })
+      setShowCreate(false)
+    } catch {
+      setActionError('Не удалось опубликовать пост. Проверь сеть и попробуй ещё раз.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleLike = async (postId) => {
     if (!user) return
-    await toggleLike(postId, user.uid)
+    setActionError('')
+    try {
+      await toggleLike(postId, user.uid)
+    } catch {
+      setActionError('Не удалось обновить лайк.')
+    }
   }
 
   const handleDelete = async (postId) => {
-    await deletePost(postId)
+    setActionError('')
+    try {
+      await deletePost(postId)
+    } catch {
+      setActionError('Не удалось удалить пост.')
+    }
   }
 
   const handleExpandComments = async (postId) => {
@@ -70,34 +87,50 @@ export default function ForumPage() {
     // Подгружаем если еще нет
     if (!loadedComments[postId]) {
       setLoadingComments((p) => ({ ...p, [postId]: true }))
-      const comments = await fetchComments(postId)
-      setLoadedComments((p) => ({ ...p, [postId]: comments }))
-      setLoadingComments((p) => ({ ...p, [postId]: false }))
+      setActionError('')
+      try {
+        const comments = await fetchComments(postId)
+        setLoadedComments((p) => ({ ...p, [postId]: comments }))
+      } catch {
+        setActionError('Не удалось загрузить комментарии.')
+        setExpandedComments((p) => ({ ...p, [postId]: false }))
+      } finally {
+        setLoadingComments((p) => ({ ...p, [postId]: false }))
+      }
     }
   }
 
   const handleAddComment = async (postId) => {
     const text = commentText[postId]?.trim()
     if (!text || !user) return
-    
+
     // Оптимистично добавляем локально, если комменты уже загружены
     const newComment = {
       id: crypto.randomUUID(),
       content: text,
       authorName: user.displayName || user.email,
     }
-    
+
+    const previousComments = loadedComments[postId] || []
+
+    setActionError('')
     setLoadedComments((p) => ({
       ...p,
-      [postId]: [...(p[postId] || []), newComment]
+      [postId]: [...previousComments, newComment]
     }))
     setCommentText((prev) => ({ ...prev, [postId]: '' }))
-    
-    await addComment(postId, {
-      content: text,
-      authorId: user.uid,
-      authorName: user.displayName || user.email,
-    })
+
+    try {
+      await addComment(postId, {
+        content: text,
+        authorId: user.uid,
+        authorName: user.displayName || user.email,
+      })
+    } catch {
+      setLoadedComments((p) => ({ ...p, [postId]: previousComments }))
+      setCommentText((prev) => ({ ...prev, [postId]: text }))
+      setActionError('Не удалось отправить комментарий.')
+    }
   }
 
   return (
@@ -114,6 +147,19 @@ export default function ForumPage() {
         <p className={styles.forum__subtitle}>
           Обсуждай новости, делись опытом и общайся с комьюнити.
         </p>
+        {actionError && (
+          <div style={{
+            marginTop: 'var(--space-4)',
+            padding: 'var(--space-3) var(--space-4)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.24)',
+            color: '#fca5a5',
+            fontSize: 'var(--font-size-sm)',
+          }}>
+            {actionError}
+          </div>
+        )}
         {user && (
           <Button
             variant="primary"
@@ -266,12 +312,12 @@ export default function ForumPage() {
       {/* Create Post Modal */}
       <Modal
         open={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={() => { setShowCreate(false); setActionError('') }}
         title={`Новый пост — ${sectionLabels[activeSection]}`}
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setShowCreate(false)}>
+            <Button variant="ghost" onClick={() => { setShowCreate(false); setActionError('') }}>
               Отмена
             </Button>
             <Button

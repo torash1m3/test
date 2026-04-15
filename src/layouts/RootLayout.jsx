@@ -14,7 +14,7 @@ const NAV_LINKS = [
 
 export default function RootLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { user, loading } = useAuthStore()
+  const { user } = useAuthStore()
   const isAuthenticated = !!user
 
   const toggleMobile = () => setMobileOpen((prev) => !prev)

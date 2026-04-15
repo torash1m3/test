@@ -1,16 +1,114 @@
-# React + Vite
+# NeoForge
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+NeoForge — это SPA для сборки ПК с форумом и профилями пользователей.
 
-Currently, two official plugins are available:
+Сейчас в проекте уже есть:
+- конструктор сборок с категориями комплектующих
+- встроенная база компонентов
+- проверки совместимости
+- трекер статусов покупки
+- Firebase Auth
+- профили пользователей
+- форум с лайками и комментариями
+- деплой на Firebase Hosting через GitHub Actions
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Стек
 
-## React Compiler
+- React 19
+- Vite 8
+- React Router 7
+- Zustand
+- Firebase Auth
+- Firestore
+- Framer Motion
+- Lucide React
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Команды
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Что делает каждая команда:
+- `npm run dev` — локальная разработка
+- `npm run build` — прод-сборка
+- `npm run lint` — проверка кода ESLint
+- `npm run preview` — локальный просмотр прод-сборки
+
+## Структура проекта
+
+```text
+src/
+  app/          # запуск приложения, роутер, защита приватных роутов
+  layouts/      # общий layout сайта
+  pages/        # страницы
+  features/     # прикладные фичи, сейчас в основном builder
+  stores/       # Zustand stores
+  shared/ui/    # переиспользуемые UI-компоненты
+  data/         # встроенная база компонентов
+  lib/          # подключение внешних сервисов
+  styles/       # глобальные стили и дизайн-токены
+docs/           # заметки, roadmap и концепция
+.github/        # CI/CD workflows
+```
+
+## Основные роуты
+
+- `/` — главная
+- `/auth` — вход и регистрация
+- `/builder` — конструктор ПК, только для авторизованных
+- `/forum` — форум
+- `/profile` — профиль, только для авторизованных
+
+## Где лежит логика
+
+- `src/stores/authStore.js` — авторизация, профиль пользователя
+- `src/stores/builderStore.js` — сборки, localStorage, синхронизация с Firestore
+- `src/stores/forumStore.js` — посты, лайки, комментарии
+- `src/features/builder/compatibility.js` — правила совместимости
+- `src/features/builder/schemas.js` — схемы категорий и атрибутов
+- `src/data/components.json` — встроенная база комплектующих
+
+## Firebase
+
+Проект уже привязан к Firebase:
+- project id: `neoforge-38813`
+- hosting config: `firebase.json`
+- Firestore rules: `firestore.rules`
+- Storage rules: `storage.rules`
+
+Сейчас используются такие сущности:
+- `users/{userId}` — профиль пользователя
+- `users/{userId}/builds/{buildId}` — приватные сборки пользователя
+- `forum/{postId}` — посты форума
+- `forum/{postId}/comments/{commentId}` — комментарии
+- `reports/{reportId}` — заявки на недостающие комплектующие
+
+## Что важно знать
+
+- `README` раньше был шаблонным от Vite, теперь это краткая карта проекта.
+- `docs/concept.md` и `docs/TODO.md` полезны, но могут местами отставать от реального кода.
+- Сборки сейчас приватные.
+- Форум пока без полноценного редактирования постов: сейчас упор на стабильность и базовую безопасность.
+
+## Деплой
+
+Автодеплой настроен через GitHub Actions:
+- push в `main` — деплой в live Firebase Hosting
+- pull request — preview deployment
+
+Файлы workflow:
+- `.github/workflows/firebase-hosting-merge.yml`
+- `.github/workflows/firebase-hosting-pull-request.yml`
+
+## Ближайший технический фокус
+
+Перед большим редизайном полезно держать в фокусе:
+- чистый `lint`
+- совпадение фронта и Firestore rules
+- понятные ошибки в UI
+- постепенную очистку документации и конфигов

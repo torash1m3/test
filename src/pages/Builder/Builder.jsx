@@ -397,6 +397,7 @@ export default function BuilderPage() {
 
       {/* Add Component Modal */}
       <AddComponentModal
+        key={`${modalOpen}-${modalCategory || 'all'}`}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onAdd={handleAddComponent}

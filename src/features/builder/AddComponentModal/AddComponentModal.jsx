@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Button, Input, Modal, Select } from '@/shared/ui'
 import Autocomplete from '@/shared/ui/Autocomplete/Autocomplete'
 import { getSchemaForCategory, getEmptyAttrs, CATEGORY_SCHEMAS } from '@/features/builder/schemas'
@@ -9,16 +9,6 @@ const categoryOptions = Object.entries(CATEGORY_SCHEMAS).map(([key, val]) => ({
   value: key,
   label: val.label,
 }))
-
-/**
- * Получить подсказки для атрибутов из БД по имени компонента.
- * Возвращает объект attrs (сокет, TDP и т.д.) или null.
- */
-function lookupComponent(category, name) {
-  const list = componentsDb[category]
-  if (!list) return null
-  return list.find((item) => item.name === name) || null
-}
 
 /**
  * Рендер мета-тегов в автокомплите — показываем ключевые атрибуты.
@@ -50,29 +40,18 @@ function renderItemMeta(item) {
 }
 
 export default function AddComponentModal({ open, onClose, onAdd, defaultCategory = '' }) {
-  const [category, setCategory] = useState(defaultCategory || 'cpu')
+  const initialCategory = defaultCategory || 'cpu'
+  const [category, setCategory] = useState(initialCategory)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [notes, setNotes] = useState('')
-  const [attrs, setAttrs] = useState(() => getEmptyAttrs(defaultCategory || 'cpu'))
+  const [attrs, setAttrs] = useState(() => getEmptyAttrs(initialCategory))
   const [autoFilled, setAutoFilled] = useState(false)
 
   const schema = useMemo(() => getSchemaForCategory(category), [category])
 
   // Список компонентов из БД для текущей категории
   const suggestions = useMemo(() => componentsDb[category] || [], [category])
-
-  // Сброс при смене defaultCategory (когда пользователь жмёт + на конкретной категории)
-  useEffect(() => {
-    if (open && defaultCategory) {
-      setCategory(defaultCategory)
-      setAttrs(getEmptyAttrs(defaultCategory))
-      setName('')
-      setPrice('')
-      setNotes('')
-      setAutoFilled(false)
-    }
-  }, [open, defaultCategory])
 
   const handleCategoryChange = (e) => {
     const newCat = e.target.value
