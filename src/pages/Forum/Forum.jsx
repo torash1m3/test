@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router'
 import { Newspaper, MessagesSquare, Send, Trash2, Heart, MessageSquare, Reply } from 'lucide-react'
 import useForumStore from '@/stores/forumStore'
 import useAuthStore from '@/stores/authStore'
@@ -187,7 +188,9 @@ export default function ForumPage() {
                   className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
                 >
                   <div className={styles.messageMeta}>
-                    <span className={styles.messageAuthor}>{msg.authorName}</span>
+                    <Link to={`/profile/${msg.authorId}`} className={styles.messageAuthorLink} style={{ color: 'inherit', textDecoration: 'none' }}>
+                      <span className={styles.messageAuthor}>{msg.authorName}</span>
+                    </Link>
                     <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>
                   </div>
                   
@@ -236,7 +239,9 @@ export default function ForumPage() {
                             <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Грузим ветку...</span>
                           ) : loadedComments[msg.id]?.map(c => (
                             <div key={c.id} className={styles.threadItem}>
-                              <span className={styles.threadAuthor}>{c.authorName}:</span>
+                              <Link to={`/profile/${c.authorId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                <span className={styles.threadAuthor}>{c.authorName}:</span>
+                              </Link>
                               <span className={styles.threadContent}>{c.content}</span>
                             </div>
                           ))}
