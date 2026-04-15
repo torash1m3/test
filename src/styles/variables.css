@@ -23,6 +23,12 @@
   --color-accent-hover: #818cf8;
   --color-accent-glow: rgba(99, 102, 241, 0.35);
   --color-accent-soft: rgba(99, 102, 241, 0.12);
+  --color-accent-rgb: 99, 102, 241;
+
+  /* Backward-compatible aliases for experimental pages */
+  --color-primary: var(--color-accent);
+  --color-primary-muted: var(--color-accent-soft);
+  --color-surface: var(--color-bg-tertiary);
 
   --color-cyan: #22d3ee;
   --color-cyan-glow: rgba(34, 211, 238, 0.3);
@@ -44,6 +50,7 @@
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
+  --font-size-md: var(--font-size-base);
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
@@ -104,6 +111,7 @@
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-short: var(--transition-fast);
 
   /* ---- Z-Index ---- */
   --z-dropdown: 100;

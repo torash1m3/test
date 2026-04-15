@@ -114,6 +114,7 @@ export default function ForumPage() {
     const newComment = {
       id: crypto.randomUUID(),
       content: text,
+      authorId: user.uid,
       authorName: user.displayName || user.email,
     }
     const prevs = loadedComments[postId] || []

@@ -15,8 +15,7 @@ export default function ProfilePage() {
   const isMyProfile = !id || id === user?.uid
   const isAdmin = myProfile?.role === 'admin'
 
-  const [targetProfile, setTargetProfile] = useState(null)
-  const [loadingTarget, setLoadingTarget] = useState(false)
+  const [fetchedProfile, setFetchedProfile] = useState({ id: null, data: null })
 
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -32,27 +31,23 @@ export default function ProfilePage() {
   const [savingRole, setSavingRole] = useState(false)
 
   useEffect(() => {
-    if (authLoading) return
-
-    if (isMyProfile) {
-      if (myProfile) {
-        setTargetProfile(myProfile)
-      } else {
-        setTargetProfile(null)
-      }
+    if (authLoading || isMyProfile) {
       return
     }
 
     let isMounted = true
-    setLoadingTarget(true)
     fetchProfile(id).then(data => {
       if (isMounted) {
-        setTargetProfile(data)
-        setLoadingTarget(false)
+        setFetchedProfile({ id, data })
       }
     })
     return () => { isMounted = false }
-  }, [id, myProfile, authLoading, isMyProfile, fetchProfile])
+  }, [id, authLoading, isMyProfile, fetchProfile])
+
+  const loadingTarget = !isMyProfile && fetchedProfile.id !== id
+  const targetProfile = isMyProfile
+    ? myProfile
+    : fetchedProfile.id === id ? fetchedProfile.data : null
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
@@ -84,7 +79,10 @@ export default function ProfilePage() {
     setSavingRole(true)
     const success = await updateUserRole(id, newRole.trim())
     if (success) {
-      setTargetProfile(prev => ({ ...prev, role: newRole.trim() }))
+      setFetchedProfile(prev => ({
+        ...prev,
+        data: prev.data ? { ...prev.data, role: newRole.trim() } : prev.data,
+      }))
       setEditingRole(false)
     }
     setSavingRole(false)
