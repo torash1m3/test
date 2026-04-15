@@ -32,8 +32,8 @@ service cloud.firestore {
                     && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
                     && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30);
 
-      // Обновление — только свой, нельзя менять role/uid/email
-      allow update: if isOwner(userId)
+      // Обновление — только свой, нельзя менять role/uid/email, ИЛИ Админ
+      allow update: if (isOwner(userId)
                     && request.resource.data.keys().hasOnly([
                       'uid','email','displayName','nickname','avatarUrl',
                       'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
@@ -46,7 +46,8 @@ service cloud.firestore {
                     && (!("pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
                     && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50)
                     && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
-                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30);
+                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30))
+                    || isAdmin();
 
       allow delete: if false;
     }

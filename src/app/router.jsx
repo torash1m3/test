@@ -41,6 +41,7 @@ const router = createBrowserRouter([
       { path: 'builder', element: <ProtectedRoute><LazyPage Component={Builder} /></ProtectedRoute> },
       { path: 'forum', element: <LazyPage Component={Forum} /> },
       { path: 'profile', element: <ProtectedRoute><LazyPage Component={Profile} /></ProtectedRoute> },
+      { path: 'profile/:id', element: <LazyPage Component={Profile} /> },
       { path: 'auth', element: <LazyPage Component={Auth} /> },
       { path: '*', element: <LazyPage Component={NotFound} /> },
     ],

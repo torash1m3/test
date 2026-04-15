@@ -1,15 +1,22 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { motion } from 'framer-motion'
-import { Monitor, Settings, LogOut, Save, X } from 'lucide-react'
+import { Monitor, Settings, LogOut, Save, X, Edit3 } from 'lucide-react'
 import { Button, Card, Avatar, Input } from '@/shared/ui'
 import useAuthStore from '@/stores/authStore'
 import styles from './Profile.module.css'
 
 export default function ProfilePage() {
-  const { user, profile, loading, signOut, saveProfile } = useAuthStore()
+  const { id } = useParams()
+  const { user, profile: myProfile, loading: authLoading, signOut, saveProfile, fetchProfile, updateUserRole } = useAuthStore()
   const isAuthenticated = !!user
   const navigate = useNavigate()
+
+  const isMyProfile = !id || id === user?.uid
+  const isAdmin = myProfile?.role === 'admin'
+
+  const [targetProfile, setTargetProfile] = useState(null)
+  const [loadingTarget, setLoadingTarget] = useState(false)
 
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -19,15 +26,43 @@ export default function ProfilePage() {
     pcSpecs: '',
   })
 
+  // Admin role edit state
+  const [editingRole, setEditingRole] = useState(false)
+  const [newRole, setNewRole] = useState('')
+  const [savingRole, setSavingRole] = useState(false)
+
+  useEffect(() => {
+    if (authLoading) return
+
+    if (isMyProfile) {
+      if (myProfile) {
+        setTargetProfile(myProfile)
+      } else {
+        setTargetProfile(null)
+      }
+      return
+    }
+
+    let isMounted = true
+    setLoadingTarget(true)
+    fetchProfile(id).then(data => {
+      if (isMounted) {
+        setTargetProfile(data)
+        setLoadingTarget(false)
+      }
+    })
+    return () => { isMounted = false }
+  }, [id, myProfile, authLoading, isMyProfile, fetchProfile])
+
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
   const handleStartEditing = () => {
     setForm({
-      nickname: profile?.nickname || profile?.displayName || '',
-      avatarUrl: profile?.avatarUrl || '',
-      pcSpecs: profile?.pcSpecs || '',
+      nickname: targetProfile?.nickname || targetProfile?.displayName || '',
+      avatarUrl: targetProfile?.avatarUrl || '',
+      pcSpecs: targetProfile?.pcSpecs || '',
     })
     setEditing(true)
   }
@@ -44,7 +79,18 @@ export default function ProfilePage() {
     navigate('/')
   }
 
-  if (loading) {
+  const handleSaveRole = async () => {
+    if (!newRole.trim()) return
+    setSavingRole(true)
+    const success = await updateUserRole(id, newRole.trim())
+    if (success) {
+      setTargetProfile(prev => ({ ...prev, role: newRole.trim() }))
+      setEditingRole(false)
+    }
+    setSavingRole(false)
+  }
+
+  if (authLoading || loadingTarget) {
     return (
       <motion.div
         className={styles.profile}
@@ -52,13 +98,13 @@ export default function ProfilePage() {
         animate={{ opacity: 1 }}
       >
         <div className={styles.profile__guest}>
-          <p style={{ color: 'var(--color-text-muted)' }}>Загрузка...</p>
+          <p style={{ color: 'var(--color-text-muted)' }}>Загрузка профиля...</p>
         </div>
       </motion.div>
     )
   }
 
-  if (!isAuthenticated || !user) {
+  if (isMyProfile && (!isAuthenticated || !user)) {
     return (
       <motion.div
         className={styles.profile}
@@ -78,8 +124,28 @@ export default function ProfilePage() {
     )
   }
 
-  const displayName = profile?.nickname || user.displayName || user.email
-  const avatarSrc = profile?.avatarUrl || user.photoURL
+  if (!targetProfile && !isMyProfile) {
+    return (
+      <motion.div
+        className={styles.profile}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className={styles.profile__guest}>
+          <h2 className={styles['profile__guest-title']}>Профиль не найден</h2>
+          <p className={styles['profile__guest-desc']}>
+            Возможно, ссылка неверна или пользователь был удален
+          </p>
+          <Link to="/">
+            <Button variant="secondary">На главную</Button>
+          </Link>
+        </div>
+      </motion.div>
+    )
+  }
+
+  const displayName = targetProfile?.nickname || targetProfile?.displayName || targetProfile?.email || "Пользователь"
+  const avatarSrc = targetProfile?.avatarUrl || (isMyProfile ? user?.photoURL : '')
 
   return (
     <motion.div
@@ -97,7 +163,7 @@ export default function ProfilePage() {
             ring
           />
 
-          {editing ? (
+          {editing && isMyProfile ? (
             <div className={styles.profile__edit}>
               <Input
                 label="Никнейм"
@@ -135,21 +201,57 @@ export default function ProfilePage() {
             </div>
           ) : (
             <>
-              <h1 className={styles.profile__name}>{displayName}</h1>
-              <p className={styles.profile__email}>{user.email}</p>
-              {profile?.createdAt && (
+              <div className={styles.profile__nameContainer}>
+                <h1 className={styles.profile__name}>{displayName}</h1>
+                {targetProfile?.role && (
+                  <span className={styles.profile__roleBadge} data-role={targetProfile.role}>
+                    {targetProfile.role}
+                  </span>
+                )}
+              </div>
+              
+              {targetProfile?.email && <p className={styles.profile__email}>{targetProfile.email}</p>}
+              
+              {targetProfile?.createdAt && (
                 <p className={styles.profile__joined}>
-                  На платформе с {new Date(profile.createdAt).toLocaleDateString('ru-RU')}
+                  На платформе с {new Date(targetProfile.createdAt).toLocaleDateString('ru-RU')}
                 </p>
               )}
-              <div className={styles.profile__actions}>
-                <Button variant="secondary" size="sm" icon={Settings} onClick={handleStartEditing}>
-                  Редактировать
-                </Button>
-                <Button variant="ghost" size="sm" icon={LogOut} onClick={handleSignOut}>
-                  Выйти
-                </Button>
-              </div>
+
+              {isAdmin && !isMyProfile && (
+                <div className={styles.profile__adminRow}>
+                  {editingRole ? (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginTop: '12px' }}>
+                      <Input 
+                        value={newRole} 
+                        onChange={e => setNewRole(e.target.value)} 
+                        placeholder="Назначить роль"
+                      />
+                      <Button size="sm" onClick={handleSaveRole} disabled={savingRole} icon={Save}>
+                        Сохранить
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingRole(false)} icon={X}>
+                        Отмена
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={() => { setNewRole(targetProfile?.role || ''); setEditingRole(true) }} icon={Edit3}>
+                      Выдать роль
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {isMyProfile && (
+                <div className={styles.profile__actions}>
+                  <Button variant="secondary" size="sm" icon={Settings} onClick={handleStartEditing}>
+                    Редактировать
+                  </Button>
+                  <Button variant="ghost" size="sm" icon={LogOut} onClick={handleSignOut}>
+                    Выйти
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -158,10 +260,10 @@ export default function ProfilePage() {
       {/* PC Specs */}
       <div className={styles.profile__section}>
         <h2 className={styles['profile__section-title']}>
-          <Monitor size={20} /> Мой компьютер
+          <Monitor size={20} /> Компьютер
         </h2>
         <Card>
-          {editing ? (
+          {editing && isMyProfile ? (
             <div style={{ padding: 'var(--space-5)' }}>
               <Input
                 label="Характеристики ПК"
@@ -173,20 +275,22 @@ export default function ProfilePage() {
                 maxLength={2000}
               />
             </div>
-          ) : profile?.pcSpecs ? (
+          ) : targetProfile?.pcSpecs ? (
             <div style={{ padding: 'var(--space-5)', whiteSpace: 'pre-wrap', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
-              {profile.pcSpecs}
+              {targetProfile.pcSpecs}
             </div>
           ) : (
             <Card.Body>
               <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                Ты ещё не добавил характеристики своего ПК.
+                {isMyProfile ? 'Ты ещё не добавил характеристики своего ПК.' : 'Пользователь не указал характеристики своего ПК.'}
               </p>
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <Button variant="secondary" size="sm" onClick={handleStartEditing}>
-                  Указать характеристики
-                </Button>
-              </div>
+              {isMyProfile && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
+                  <Button variant="secondary" size="sm" onClick={handleStartEditing}>
+                    Указать характеристики
+                  </Button>
+                </div>
+              )}
             </Card.Body>
           )}
         </Card>

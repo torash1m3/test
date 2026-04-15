@@ -92,6 +92,19 @@ const useAuthStore = create((set, get) => ({
   },
 
   /**
+   * Обновить роль пользователя (только для админов)
+   */
+  updateUserRole: async (targetUid, newRole) => {
+    try {
+      await setDoc(doc(db, 'users', targetUid), { role: newRole }, { merge: true })
+      return true
+    } catch (e) {
+      console.error('Ошибка обновления роли:', e)
+      return false
+    }
+  },
+
+  /**
    * Регистрация по Email/Password
    */
   signUp: async (email, password, displayName) => {
