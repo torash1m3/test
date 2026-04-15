@@ -1,124 +1,124 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Heart, Plus, Newspaper, MessagesSquare, Send, Trash2 } from 'lucide-react'
-import { Button, Card, Avatar, Input, Modal } from '@/shared/ui'
+import { Newspaper, MessagesSquare, Send, Trash2, Heart, MessageSquare, Reply } from 'lucide-react'
 import useForumStore from '@/stores/forumStore'
 import useAuthStore from '@/stores/authStore'
 import styles from './Forum.module.css'
 
-const TAB_ICONS = {
-  news: Newspaper,
-  chat: MessagesSquare,
-}
+const CHANNELS = [
+  { id: 'chat', label: 'Global Chat', icon: MessagesSquare },
+  { id: 'news', label: 'News', icon: Newspaper },
+]
 
 export default function ForumPage() {
-  const { sections, sectionLabels, loading, subscribe, unsubscribe, createPost, deletePost, toggleLike, addComment, fetchComments, getPostsBySection } = useForumStore()
-  const { user } = useAuthStore()
-  const [activeSection, setActiveSection] = useState('news')
-  const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ title: '', content: '' })
-  const [submitting, setSubmitting] = useState(false)
-  const [actionError, setActionError] = useState('')
+  const { posts, loading, subscribe, unsubscribe, createPost, deletePost, toggleLike, addComment, fetchComments } = useForumStore()
+  const { user, profile } = useAuthStore()
   
-  // Комментарии и раскрытые посты
-  const [commentText, setCommentText] = useState({})
-  const [expandedComments, setExpandedComments] = useState({}) // { postId: boolean }
-  const [loadedComments, setLoadedComments] = useState({}) // { postId: [comments...] }
-  const [loadingComments, setLoadingComments] = useState({}) // { postId: boolean }
+  const [activeChannel, setActiveChannel] = useState('chat')
+  const [inputValue, setInputValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  
+  // Комментарии (Threads)
+  const [expandedThreads, setExpandedThreads] = useState({}) // { messageId: boolean }
+  const [loadedComments, setLoadedComments] = useState({}) // { messageId: [comments...] }
+  const [loadingComments, setLoadingComments] = useState({}) // { messageId: boolean }
+  const [threadInputs, setThreadInputs] = useState({}) // { messageId: text }
 
-  // Подписка на посты при маунте
+  const messagesEndRef = useRef(null)
+  
+  // Авто-прокрутка вниз при изменении списка постов или смене канала
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   useEffect(() => {
     subscribe()
     return () => unsubscribe()
   }, [subscribe, unsubscribe])
 
-  const sectionPosts = getPostsBySection(activeSection)
+  const channelMessages = posts.filter(p => p.section === activeChannel).reverse() // Firestore возвращает свежие первыми (desc), нам для чата нужно asc (свежие снизу)
 
-  const handleCreate = async (e) => {
-    e.preventDefault()
-    if (!form.content.trim() || !user) return
+  useEffect(() => {
+    // Ждём рендера и скроллим вниз
+    setTimeout(scrollToBottom, 100)
+  }, [channelMessages.length, activeChannel])
+
+
+  // --- ACTIONS ---
+
+  const handleSendMessage = async (e) => {
+    e?.preventDefault?.()
+    if (!inputValue.trim() || !user) return
     setSubmitting(true)
-    setActionError('')
     try {
       await createPost({
-        section: activeSection,
-        title: form.title.trim(),
-        content: form.content.trim(),
+        section: activeChannel,
+        title: '', // для чата тайтлы не нужны
+        content: inputValue.trim(),
         authorId: user.uid,
         authorName: user.displayName || user.email,
       })
-      setForm({ title: '', content: '' })
-      setShowCreate(false)
-    } catch {
-      setActionError('Не удалось опубликовать пост. Проверь сеть и попробуй ещё раз.')
+      setInputValue('')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleLike = async (postId) => {
-    if (!user) return
-    setActionError('')
-    try {
-      await toggleLike(postId, user.uid)
-    } catch {
-      setActionError('Не удалось обновить лайк.')
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
 
   const handleDelete = async (postId) => {
-    setActionError('')
-    try {
+    if (confirm('Удалить сообщение?')) {
       await deletePost(postId)
-    } catch {
-      setActionError('Не удалось удалить пост.')
     }
   }
 
-  const handleExpandComments = async (postId) => {
-    const isExpanded = expandedComments[postId]
+  const handleLike = async (postId) => {
+    if (!user) return
+    await toggleLike(postId, user.uid)
+  }
+
+  // --- THREADS (COMMENTS) ---
+
+  const toggleThread = async (postId) => {
+    const isExpanded = expandedThreads[postId]
     if (isExpanded) {
-      setExpandedComments((p) => ({ ...p, [postId]: false }))
+      setExpandedThreads(p => ({ ...p, [postId]: false }))
       return
     }
 
-    setExpandedComments((p) => ({ ...p, [postId]: true }))
+    setExpandedThreads(p => ({ ...p, [postId]: true }))
     
-    // Подгружаем если еще нет
     if (!loadedComments[postId]) {
-      setLoadingComments((p) => ({ ...p, [postId]: true }))
-      setActionError('')
+      setLoadingComments(p => ({ ...p, [postId]: true }))
       try {
         const comments = await fetchComments(postId)
-        setLoadedComments((p) => ({ ...p, [postId]: comments }))
+        setLoadedComments(p => ({ ...p, [postId]: comments }))
       } catch {
-        setActionError('Не удалось загрузить комментарии.')
-        setExpandedComments((p) => ({ ...p, [postId]: false }))
+        setExpandedThreads(p => ({ ...p, [postId]: false }))
       } finally {
-        setLoadingComments((p) => ({ ...p, [postId]: false }))
+        setLoadingComments(p => ({ ...p, [postId]: false }))
       }
     }
   }
 
-  const handleAddComment = async (postId) => {
-    const text = commentText[postId]?.trim()
+  const handleSendThreadMsg = async (postId) => {
+    const text = threadInputs[postId]?.trim()
     if (!text || !user) return
-
-    // Оптимистично добавляем локально, если комменты уже загружены
+    
     const newComment = {
       id: crypto.randomUUID(),
       content: text,
       authorName: user.displayName || user.email,
     }
+    const prevs = loadedComments[postId] || []
 
-    const previousComments = loadedComments[postId] || []
-
-    setActionError('')
-    setLoadedComments((p) => ({
-      ...p,
-      [postId]: [...previousComments, newComment]
-    }))
-    setCommentText((prev) => ({ ...prev, [postId]: '' }))
+    setLoadedComments(p => ({ ...p, [postId]: [...prevs, newComment] }))
+    setThreadInputs(p => ({ ...p, [postId]: '' }))
 
     try {
       await addComment(postId, {
@@ -127,229 +127,177 @@ export default function ForumPage() {
         authorName: user.displayName || user.email,
       })
     } catch {
-      setLoadedComments((p) => ({ ...p, [postId]: previousComments }))
-      setCommentText((prev) => ({ ...prev, [postId]: text }))
-      setActionError('Не удалось отправить комментарий.')
+      setLoadedComments(p => ({ ...p, [postId]: prevs }))
+      setThreadInputs(p => ({ ...p, [postId]: text }))
     }
   }
 
+  const isAdmin = profile?.role === 'admin'
+
   return (
-    <motion.div
-      className={styles.forum}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+    <motion.div 
+      className={styles.chatLayout}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className={styles.forum__header}>
-        <h1 className={styles.forum__title}>
-          <span className="gradient-text">Форум</span>
-        </h1>
-        <p className={styles.forum__subtitle}>
-          Обсуждай новости, делись опытом и общайся с комьюнити.
-        </p>
-        {actionError && (
-          <div style={{
-            marginTop: 'var(--space-4)',
-            padding: 'var(--space-3) var(--space-4)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.24)',
-            color: '#fca5a5',
-            fontSize: 'var(--font-size-sm)',
-          }}>
-            {actionError}
-          </div>
-        )}
-        {user && (
-          <Button
-            variant="primary"
-            icon={Plus}
-            onClick={() => setShowCreate(true)}
-            style={{ marginTop: 'var(--space-4)' }}
-          >
-            Написать
-          </Button>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className={styles.forum__tabs}>
-        {sections.map((section) => {
-          const Icon = TAB_ICONS[section]
-          return (
+      {/* SIDEBAR (Каналы) */}
+      <div className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>
+          <div className={styles.sidebarTitle}>NeoChat</div>
+          <div className={styles.sidebarSubtitle}>Stay connected</div>
+        </div>
+        <div className={styles.channelList}>
+          {CHANNELS.map(ch => (
             <button
-              key={section}
-              className={`${styles.forum__tab} ${activeSection === section ? styles['forum__tab--active'] : ''}`}
-              onClick={() => setActiveSection(section)}
+              key={ch.id}
+              className={`${styles.channelBtn} ${activeChannel === ch.id ? styles.channelBtnActive : ''}`}
+              onClick={() => setActiveChannel(ch.id)}
             >
-              {Icon && <Icon size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />}
-              {sectionLabels[section]}
+              <ch.icon size={18} />
+              {ch.label}
             </button>
-          )
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Posts */}
-      <div className={styles.forum__posts}>
-        {loading ? (
-          <div className={styles.forum__empty}>
-            <p style={{ color: 'var(--color-text-muted)' }}>Загрузка...</p>
+      {/* MAIN CHAT AREA */}
+      <div className={styles.mainArea}>
+        <div className={styles.chatHeader}>
+          <div className={styles.chatHeaderTitle}>
+            {CHANNELS.find(c => c.id === activeChannel)?.label}
           </div>
-        ) : sectionPosts.length > 0 ? (
-          sectionPosts.map((post) => {
-            const hasLiked = user && post.likedBy?.includes(user.uid)
-            const isCommentsExpanded = expandedComments[post.id]
+        </div>
 
-            return (
-              <Card key={post.id}>
-                <div className={styles.post__meta}>
-                  <Avatar name={post.authorName} size="sm" />
-                  <span className={styles.post__author}>{post.authorName}</span>
-                  <span className={styles.post__date}>
-                    {post.createdAt ? new Date(post.createdAt).toLocaleDateString('ru-RU') : ''}
-                  </span>
-                  {user && user.uid === post.authorId && (
-                    <button
-                      className={styles.post__delete}
-                      onClick={() => handleDelete(post.id)}
-                      title="Удалить"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-                {post.title && (
-                  <h3 style={{ marginBottom: 'var(--space-2)', fontWeight: 'var(--font-weight-semibold)' }}>
-                    {post.title}
-                  </h3>
-                )}
-                <p className={styles.post__content}>{post.content}</p>
+        <div className={styles.messagesContainer}>
+          {loading ? (
+            <div className={styles.messagesEmpty}>
+              Загрузка...
+            </div>
+          ) : channelMessages.length > 0 ? (
+            channelMessages.map(msg => {
+              const isMine = user?.uid === msg.authorId
+              const hasLiked = user && msg.likedBy?.includes(user?.uid)
+              const canDelete = isMine || isAdmin
+              const isThreadOpen = expandedThreads[msg.id]
 
-                <Card.Footer>
-                  <div className={styles.post__actions}>
-                    <button 
-                      className={styles.post__action} 
-                      onClick={() => handleLike(post.id)}
-                      style={{ color: hasLiked ? 'var(--color-error)' : undefined }}
-                    >
-                      <Heart size={14} fill={hasLiked ? 'currentColor' : 'none'} /> 
-                      {post.likedBy?.length || 0}
-                    </button>
-                    <button className={styles.post__action} onClick={() => handleExpandComments(post.id)}>
-                      <MessageSquare size={14} /> {post.commentCount || 0}
-                    </button>
+              return (
+                <div 
+                  key={msg.id} 
+                  className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
+                >
+                  <div className={styles.messageMeta}>
+                    <span className={styles.messageAuthor}>{msg.authorName}</span>
+                    <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>
                   </div>
-                </Card.Footer>
+                  
+                  <div className={styles.messageBubble}>
+                    {msg.title && <div className={styles.messageTitle}>{msg.title}</div>}
+                    <div className={styles.messageContent}>{msg.content}</div>
 
-                {/* Подгруженные комментарии */}
-                <AnimatePresence>
-                  {isCommentsExpanded && (
-                    <motion.div 
-                      className={styles.post__comments}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                    >
-                      {loadingComments[post.id] ? (
-                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', padding: 'var(--space-2) 0' }}>
-                          Загрузка комментариев...
-                        </div>
-                      ) : loadedComments[post.id]?.length > 0 ? (
-                        loadedComments[post.id].map((c) => (
-                          <div key={c.id} className={styles.comment}>
-                            <span className={styles.comment__author}>{c.authorName}</span>
-                            <span className={styles.comment__text}>{c.content}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', padding: 'var(--space-2) 0' }}>
-                          Пока нет комментариев
-                        </div>
-                      )}
+                    <div className={styles.messageActions}>
+                      <button 
+                        className={`${styles.actionBtn} ${hasLiked ? styles.actionBtnLiked : ''}`}
+                        onClick={() => handleLike(msg.id)}
+                      >
+                        <Heart size={12} fill={hasLiked ? 'currentColor' : 'none'} />
+                        {msg.likedBy?.length > 0 && msg.likedBy.length}
+                      </button>
+                      
+                      <button 
+                        className={styles.actionBtn}
+                        onClick={() => toggleThread(msg.id)}
+                      >
+                        <MessageSquare size={12} />
+                        {msg.commentCount > 0 && msg.commentCount}
+                      </button>
 
-                      {user && (
-                        <div className={styles.post__comment_form} style={{ marginTop: 'var(--space-2)' }}>
-                          <input
-                            className={styles.post__comment_input}
-                            placeholder="Написать комментарий..."
-                            value={commentText[post.id] || ''}
-                            onChange={(e) =>
-                              setCommentText((prev) => ({ ...prev, [post.id]: e.target.value }))
-                            }
-                            maxLength={1000}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleAddComment(post.id)
-                            }}
-                          />
-                          <button
-                            className={styles.post__comment_send}
-                            onClick={() => handleAddComment(post.id)}
-                          >
-                            <Send size={14} />
-                          </button>
-                        </div>
+                      {canDelete && (
+                        <button 
+                          className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
+                          onClick={() => handleDelete(msg.id)}
+                          title={isAdmin && !isMine ? "Удалить как Admin" : "Удалить"}
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </Card>
-            )
-          })
+                    </div>
+
+                    {/* Тред (комменты) */}
+                    <AnimatePresence>
+                      {isThreadOpen && (
+                        <motion.div 
+                          className={styles.threadContainer}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                        >
+                          {loadingComments[msg.id] ? (
+                            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Грузим ветку...</span>
+                          ) : loadedComments[msg.id]?.map(c => (
+                            <div key={c.id} className={styles.threadItem}>
+                              <span className={styles.threadAuthor}>{c.authorName}:</span>
+                              <span className={styles.threadContent}>{c.content}</span>
+                            </div>
+                          ))}
+                          
+                          {user && (
+                            <div className={styles.threadInputRow}>
+                              <input 
+                                className={styles.threadInput}
+                                placeholder="Ответить в ветку..."
+                                value={threadInputs[msg.id] || ''}
+                                onChange={e => setThreadInputs(p => ({ ...p, [msg.id]: e.target.value }))}
+                                onKeyDown={e => e.key === 'Enter' && handleSendThreadMsg(msg.id)}
+                              />
+                              <button className={styles.threadSendBtn} onClick={() => handleSendThreadMsg(msg.id)}>
+                                <Reply size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            <div className={styles.messagesEmpty}>
+              Здесь пока ничего нет. Напиши первым!
+            </div>
+          )}
+          {/* Пустой div для авто-скролла */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* INPUT AREA */}
+        {user ? (
+          <div className={styles.chatInputArea}>
+            <textarea
+              className={styles.chatTextarea}
+              placeholder="Написать сообщение..."
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
+            <button 
+              className={styles.chatSendBtn}
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || submitting}
+            >
+              <Send size={18} />
+            </button>
+          </div>
         ) : (
-          <div className={styles.forum__empty}>
-            <MessageSquare size={40} style={{ marginInline: 'auto', marginBottom: 'var(--space-4)', opacity: 0.4 }} />
-            <h3 className={styles['forum__empty-title']}>Пока здесь пусто</h3>
-            <p>Стань первым, кто напишет {sectionLabels[activeSection].toLowerCase() === 'новости' ? 'новость' : 'сообщение'}!</p>
-            {user && (
-              <Button variant="primary" icon={Plus} style={{ marginTop: 'var(--space-4)' }} onClick={() => setShowCreate(true)}>
-                Написать
-              </Button>
-            )}
+          <div className={styles.chatInputArea} style={{ justifyContent: 'center', background: 'rgba(255,255,255,0.02)' }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+              Войди в аккаунт, чтобы писать сообщения
+            </span>
           </div>
         )}
       </div>
-
-      {/* Create Post Modal */}
-      <Modal
-        open={showCreate}
-        onClose={() => { setShowCreate(false); setActionError('') }}
-        title={`Новый пост — ${sectionLabels[activeSection]}`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => { setShowCreate(false); setActionError('') }}>
-              Отмена
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreate}
-              disabled={!form.content.trim() || submitting}
-            >
-              {submitting ? 'Публикация...' : 'Опубликовать'}
-            </Button>
-          </>
-        }
-      >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <Input
-            label="Заголовок (необязательно)"
-            placeholder="Тема поста"
-            value={form.title}
-            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-            maxLength={100}
-          />
-          <Input
-            label="Текст"
-            textarea
-            placeholder="Расскажи что-нибудь..."
-            value={form.content}
-            onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
-            required
-            maxLength={5000}
-            style={{ minHeight: '100px' }}
-          />
-        </form>
-      </Modal>
     </motion.div>
   )
 }

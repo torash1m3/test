@@ -1,193 +1,405 @@
-.forum {
-  max-width: var(--container-max);
-  margin-inline: auto;
-  padding: var(--space-8) var(--space-6);
-}
-
-.forum__header {
-  margin-bottom: var(--space-8);
-}
-
-.forum__title {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  margin-bottom: var(--space-2);
-}
-
-.forum__subtitle {
-  color: var(--color-text-secondary);
-}
-
-/* Tabs */
-.forum__tabs {
+.chatLayout {
   display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
+  height: calc(100vh - var(--header-height, 80px) - var(--space-8));
+  gap: var(--space-4);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- SIDEBAR --- */
+.sidebar {
+  width: 260px;
   background: var(--color-bg-secondary);
-  border-radius: var(--radius-xl);
-  margin-bottom: var(--space-8);
-  width: fit-content;
-}
-
-.forum__tab {
-  padding: var(--space-3) var(--space-6);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-lg);
-  transition: all var(--transition-base);
-  cursor: pointer;
-  border: none;
-  background: none;
-}
-
-.forum__tab:hover {
-  color: var(--color-text-primary);
-}
-
-.forum__tab--active {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Posts */
-.forum__posts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.post__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
-.post__author {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.post__date {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-
-.post__content {
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-}
-
-.post__actions {
-  display: flex;
-  gap: var(--space-4);
-}
-
-.post__action {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  transition: color var(--transition-fast);
-  cursor: pointer;
-  border: none;
-  background: none;
-}
-
-.post__action:hover {
-  color: var(--color-text-primary);
-}
-
-/* Empty */
-.forum__empty {
-  text-align: center;
-  padding: var(--space-16) var(--space-6);
-  color: var(--color-text-muted);
-}
-
-.forum__empty-title {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-3);
-}
-
-/* Post delete */
-.post__delete {
-  margin-left: auto;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  background: none;
-  border: none;
-  transition: color var(--transition-fast);
-  padding: var(--space-1);
-}
-
-.post__delete:hover {
-  color: var(--color-error);
-}
-
-/* Comments */
-.post__comments {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.comment {
-  font-size: var(--font-size-sm);
-  background: var(--color-bg-tertiary);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-lg);
-}
-
-.comment__author {
-  font-weight: var(--font-weight-semibold);
-  margin-right: var(--space-2);
-  color: var(--color-text-primary);
-}
-
-.comment__text {
-  color: var(--color-text-secondary);
-}
-
-.post__comment_form {
-  display: flex;
-  margin-left: auto;
-  gap: var(--space-2);
-  width: 100%;
-  max-width: 300px;
-}
-
-.post__comment_input {
-  flex: 1;
-  background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-2xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+
+.sidebarHeader {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebarTitle {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  background: var(--color-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  margin-bottom: var(--space-1);
+}
+
+.sidebarSubtitle {
   font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.channelList {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.channelBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-short);
+  text-align: left;
+}
+
+.channelBtn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.channelBtnActive {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+
+.channelBtnActive svg {
+  color: var(--color-primary);
+}
+
+/* --- MAIN CHAT AREA --- */
+.mainArea {
+  flex: 1;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+
+.chatHeader {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.chatHeaderTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- MESSAGES --- */
+.messagesContainer {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  scroll-behavior: smooth;
+}
+
+.messagesEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.messageWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 80%;
+}
+
+.messageMine {
+  align-self: flex-end;
+}
+
+.messageTheirs {
+  align-self: flex-start;
+}
+
+.messageMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-2);
+}
+
+.messageMine .messageMeta {
+  flex-direction: row-reverse;
+}
+
+.messageAuthor {
+  font-weight: var(--font-weight-medium);
+}
+
+.messageBubble {
+  background: var(--color-bg-tertiary);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  position: relative;
+  word-wrap: break-word; /* Фикс для длинных слов */
+}
+
+.messageMine .messageBubble {
+  background: var(--color-primary-muted);
+  border-color: rgba(59, 130, 246, 0.2); /* Синеватый бордер */
+  color: var(--color-text-primary);
+  border-bottom-right-radius: 4px;
+}
+
+.messageTheirs .messageBubble {
+  border-bottom-left-radius: 4px;
+}
+
+/* Содержимое (заголовок поста + текст) */
+.messageTitle {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+  color: var(--color-text-primary);
+}
+
+.messageContent {
+  white-space: pre-wrap; /* поддержка переносов строк */
+}
+
+/* Действия над сообщением (лайки, комменты, удаление) */
+.messageActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  justify-content: flex-end;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-short);
+}
+
+.actionBtn:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--color-text-primary);
+}
+
+.actionBtnLiked {
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.actionBtnDelete {
+  color: var(--color-text-muted);
+}
+.actionBtnDelete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* --- ВЕТКА КОММЕНТАРИЕВ (THREADS) --- */
+.threadContainer {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(0,0,0,0.15);
+  border-radius: var(--radius-lg);
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.threadItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-xs);
+}
+
+.threadAuthor {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.threadContent {
+  color: var(--color-text-muted);
+  padding-left: var(--space-2);
+  border-left: 1px solid rgba(255,255,255,0.1);
+  white-space: pre-wrap;
+}
+
+.threadInputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.threadInput {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+  padding: 6px 12px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
   outline: none;
 }
-
-.post__comment_send {
-  background: var(--color-accent);
-  color: white;
+.threadInput:focus {
+  border-color: var(--color-primary);
+}
+.threadSendBtn {
+  background: var(--color-primary);
   border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--space-2);
-  transition: opacity var(--transition-fast);
+  color: #fff;
+  cursor: pointer;
+}
+.threadSendBtn:hover {
+  opacity: 0.9;
 }
 
-.post__comment_send:hover {
+
+/* --- CHAT INPUT (BOTTOM BAR) --- */
+.chatInputArea {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: flex-end; /* Для auto-resize textarea */
+  gap: var(--space-3);
+}
+
+.chatTextarea {
+  flex: 1;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  resize: none;
+  max-height: 150px; /* ограничение по высоте */
+  min-height: 48px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition-short);
+}
+
+.chatTextarea:focus {
+  border-color: var(--color-primary);
+}
+
+.chatSendBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-short);
+  flex-shrink: 0;
+}
+
+.chatSendBtn:hover:not(:disabled) {
   opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.chatSendBtn:disabled {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* Мобильная версия */
+@media (max-width: 768px) {
+  .chatLayout {
+    flex-direction: column;
+    padding: var(--space-2);
+    height: calc(100vh - 70px);
+  }
+
+  .sidebar {
+    width: 100%;
+    /* Делаем сайдбар компактным сверху */
+    flex-direction: row;
+    height: 60px;
+    border-radius: var(--radius-xl);
+  }
+  
+  .sidebarHeader {
+    display: none; /* Прячем заголовок "Каналы" */
+  }
+
+  .channelList {
+    flex-direction: row;
+    align-items: center;
+    padding: var(--space-1);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .channelBtn {
+    padding: var(--space-2) var(--space-3);
+    white-space: nowrap;
+    border-radius: var(--radius-full);
+  }
+
+  .messageWrapper {
+    max-width: 90%;
+  }
 }
