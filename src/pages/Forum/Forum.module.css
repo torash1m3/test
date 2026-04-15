@@ -146,6 +146,23 @@
   align-self: flex-start;
 }
 
+.messageRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.messageMine .messageRow {
+  flex-direction: row-reverse;
+}
+
+.messageBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .messageMeta {
   display: flex;
   align-items: center;
@@ -196,6 +213,17 @@
 
 .messageContent {
   white-space: pre-wrap; /* поддержка переносов строк */
+}
+
+.messageLink {
+  color: var(--color-cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+
+.messageLink:hover {
+  color: var(--color-accent-hover);
 }
 
 /* Действия над сообщением (лайки, комменты, удаление) */

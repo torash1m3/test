@@ -14,44 +14,111 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function isModerator() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator';
+    }
+
+    function canModerate() {
+      return isAdmin() || isModerator();
+    }
+
     function isValidRole(role) {
       return role == 'user' || role == 'moderator' || role == 'admin';
+    }
+
+    function currentUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+
+    function validProfilePayload(data) {
+      return data.keys().hasOnly([
+               'uid','email','displayName','nickname','avatarUrl',
+               'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
+             ])
+             && data.uid is string
+             && data.email is string
+             && data.displayName is string
+             && data.nickname is string
+             && data.avatarUrl is string
+             && data.pcSpecs is string
+             && data.bio is string
+             && data.role is string
+             && isValidRole(data.role)
+             && data.uid.size() > 0
+             && data.email.size() <= 254
+             && data.displayName.size() <= 50
+             && data.nickname.size() <= 30
+             && data.avatarUrl.size() <= 500
+             && data.pcSpecs.size() <= 2000
+             && data.bio.size() <= 500;
+    }
+
+    function validPublicProfilePayload(data) {
+      return data.keys().hasOnly([
+               'uid','displayName','nickname','avatarUrl',
+               'pcSpecs','bio','role','socialLinks','createdAt','updatedAt'
+             ])
+             && data.uid is string
+             && data.displayName is string
+             && data.nickname is string
+             && data.avatarUrl is string
+             && data.pcSpecs is string
+             && data.bio is string
+             && data.role is string
+             && isValidRole(data.role)
+             && data.uid.size() > 0
+             && data.displayName.size() <= 50
+             && data.nickname.size() <= 30
+             && data.avatarUrl.size() <= 500
+             && data.pcSpecs.size() <= 2000
+             && data.bio.size() <= 500;
     }
 
     // ══════════════════════════════════════════
     // Профили пользователей
     // ══════════════════════════════════════════
     match /users/{userId} {
-      allow read: if true;
+      allow read: if isOwner(userId) || isAdmin();
 
       // Создание профиля — только свой, с дефолтной ролью
       allow create: if isOwner(userId)
-                    && request.resource.data.keys().hasOnly([
-                      'uid','email','displayName','nickname','avatarUrl',
-                      'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
-                    ])
-                    && request.resource.data.role == 'user'
-                    && (!(  "pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
-                    && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50)
-                    && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
-                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30);
+                    && validProfilePayload(request.resource.data)
+                    && request.resource.data.uid == userId
+                    && request.resource.data.role == 'user';
 
       // Обновление — только свой, нельзя менять role/uid/email.
       // Админ может менять только роль и только на разрешённое значение.
       allow update: if (isOwner(userId)
-                    && request.resource.data.keys().hasOnly([
-                      'uid','email','displayName','nickname','avatarUrl',
-                      'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
-                    ])
-                    // Запрещаем менять критические поля
+                    && validProfilePayload(request.resource.data)
                     && request.resource.data.role == resource.data.role
                     && request.resource.data.uid == resource.data.uid
-                    && request.resource.data.email == resource.data.email
-                    // Лимиты
-                    && (!("pcSpecs" in request.resource.data) || request.resource.data.pcSpecs.size() <= 2000)
-                    && (!("displayName" in request.resource.data) || request.resource.data.displayName.size() <= 50)
-                    && (!("bio" in request.resource.data) || request.resource.data.bio.size() <= 500)
-                    && (!("nickname" in request.resource.data) || request.resource.data.nickname.size() <= 30))
+                    && request.resource.data.email == resource.data.email)
+                    || (
+                      isAdmin()
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+                      && isValidRole(request.resource.data.role)
+                    );
+
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════
+    // Публичные профили без email и приватных полей
+    // ══════════════════════════════════════════
+    match /publicProfiles/{userId} {
+      allow read: if true;
+
+      allow create: if isOwner(userId)
+                    && validPublicProfilePayload(request.resource.data)
+                    && request.resource.data.uid == userId
+                    && request.resource.data.role == currentUserRole(userId);
+
+      allow update: if (
+                      isOwner(userId)
+                      && validPublicProfilePayload(request.resource.data)
+                      && request.resource.data.uid == resource.data.uid
+                      && request.resource.data.role == resource.data.role
+                    )
                     || (
                       isAdmin()
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
@@ -80,7 +147,9 @@ service cloud.firestore {
     // Репорты
     // ══════════════════════════════════════════
     match /reports/{reportId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid || canModerate()
+      );
       allow create: if isSignedIn()
                     && request.resource.data.keys().hasOnly([
                       'componentName','category','description','status',
@@ -98,7 +167,15 @@ service cloud.firestore {
                     && request.resource.data.authorName.size() > 0
                     && request.resource.data.authorName.size() <= 100
                     && request.resource.data.status == 'pending';
-      allow update, delete: if false;
+      allow update: if canModerate()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && (
+                      request.resource.data.status == 'pending'
+                      || request.resource.data.status == 'reviewed'
+                      || request.resource.data.status == 'rejected'
+                      || request.resource.data.status == 'done'
+                    );
+      allow delete: if false;
     }
 
     // ══════════════════════════════════════════
@@ -112,6 +189,7 @@ service cloud.firestore {
       function isValidLikeUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
                && request.resource.data.likedBy is list
+               && request.resource.data.likedBy.size() <= 1000
                && (
                  (
                    !resource.data.likedBy.hasAny([request.auth.uid])
@@ -139,12 +217,14 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.resource.data.keys().hasOnly([
                       'section','title','content','authorId','authorName',
-                      'commentCount','likedBy','createdAt'
+                      'authorAvatar','commentCount','likedBy','createdAt'
                     ])
                     && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.authorName is string
                     && request.resource.data.authorName.size() > 0
                     && request.resource.data.authorName.size() <= 100
+                    && request.resource.data.authorAvatar is string
+                    && request.resource.data.authorAvatar.size() <= 500
                     && isValidSection(request.resource.data.section)
                     && request.resource.data.title is string
                     && request.resource.data.title.size() <= 100
@@ -160,26 +240,26 @@ service cloud.firestore {
         isValidLikeUpdate() || isValidCommentCountUpdate()
       );
 
-      allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || canModerate());
 
       // ── Подколлекция комментариев ──
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isSignedIn()
                       && request.resource.data.keys().hasOnly([
-                        'content','authorId','authorName','createdAt'
+                        'content','authorId','authorName','authorAvatar','createdAt'
                       ])
                       && request.resource.data.authorId == request.auth.uid
                       && request.resource.data.authorName is string
                       && request.resource.data.authorName.size() > 0
                       && request.resource.data.authorName.size() <= 100
+                      && request.resource.data.authorAvatar is string
+                      && request.resource.data.authorAvatar.size() <= 500
                       && request.resource.data.content is string
                       && request.resource.data.content.size() > 0
                       && request.resource.data.content.size() <= 2000;
-        allow update: if isSignedIn()
-                      && request.auth.uid == resource.data.authorId
-                      && request.resource.data.authorId == resource.data.authorId;
-        allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || isAdmin());
+        allow update: if false;
+        allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || canModerate());
       }
     }
   }

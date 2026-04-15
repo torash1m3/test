@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router'
 import { Newspaper, MessagesSquare, Send, Trash2, Heart, MessageSquare, Reply } from 'lucide-react'
+import { Avatar } from '@/shared/ui'
 import useForumStore from '@/stores/forumStore'
 import useAuthStore from '@/stores/authStore'
 import styles from './Forum.module.css'
@@ -10,6 +11,34 @@ const CHANNELS = [
   { id: 'chat', label: 'Global Chat', icon: MessagesSquare },
   { id: 'news', label: 'News', icon: Newspaper },
 ]
+
+function LinkifiedText({ text }) {
+  const parts = String(text || '').split(/(https?:\/\/[^\s]+)/g)
+
+  return parts.map((part, index) => {
+    if (!part.startsWith('http://') && !part.startsWith('https://')) {
+      return part
+    }
+
+    try {
+      const url = new URL(part)
+      if (!['http:', 'https:'].includes(url.protocol)) return part
+      return (
+        <a
+          key={`${part}-${index}`}
+          className={styles.messageLink}
+          href={url.toString()}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {part}
+        </a>
+      )
+    } catch {
+      return part
+    }
+  })
+}
 
 export default function ForumPage() {
   const { posts, loading, subscribe, unsubscribe, createPost, deletePost, toggleLike, addComment, fetchComments } = useForumStore()
@@ -47,17 +76,24 @@ export default function ForumPage() {
 
   // --- ACTIONS ---
 
+  const getCurrentAuthor = () => ({
+    name: profile?.nickname || user?.displayName || user?.email || 'Пользователь',
+    avatar: profile?.avatarUrl || user?.photoURL || '',
+  })
+
   const handleSendMessage = async (e) => {
     e?.preventDefault?.()
     if (!inputValue.trim() || !user) return
     setSubmitting(true)
+    const author = getCurrentAuthor()
     try {
       await createPost({
         section: activeChannel,
         title: '', // для чата тайтлы не нужны
         content: inputValue.trim(),
         authorId: user.uid,
-        authorName: user.displayName || user.email,
+        authorName: author.name,
+        authorAvatar: author.avatar,
       })
       setInputValue('')
     } finally {
@@ -110,12 +146,14 @@ export default function ForumPage() {
   const handleSendThreadMsg = async (postId) => {
     const text = threadInputs[postId]?.trim()
     if (!text || !user) return
+    const author = getCurrentAuthor()
     
     const newComment = {
       id: crypto.randomUUID(),
       content: text,
       authorId: user.uid,
-      authorName: user.displayName || user.email,
+      authorName: author.name,
+      authorAvatar: author.avatar,
     }
     const prevs = loadedComments[postId] || []
 
@@ -126,7 +164,8 @@ export default function ForumPage() {
       await addComment(postId, {
         content: text,
         authorId: user.uid,
-        authorName: user.displayName || user.email,
+        authorName: author.name,
+        authorAvatar: author.avatar,
       })
     } catch {
       setLoadedComments(p => ({ ...p, [postId]: prevs }))
@@ -134,7 +173,7 @@ export default function ForumPage() {
     }
   }
 
-  const isAdmin = profile?.role === 'admin'
+  const canModerate = profile?.role === 'admin' || profile?.role === 'moderator'
 
   return (
     <motion.div 
@@ -180,7 +219,7 @@ export default function ForumPage() {
             channelMessages.map(msg => {
               const isMine = user?.uid === msg.authorId
               const hasLiked = user && msg.likedBy?.includes(user?.uid)
-              const canDelete = isMine || isAdmin
+              const canDelete = isMine || canModerate
               const isThreadOpen = expandedThreads[msg.id]
 
               return (
@@ -188,82 +227,94 @@ export default function ForumPage() {
                   key={msg.id} 
                   className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
                 >
-                  <div className={styles.messageMeta}>
+                  <div className={styles.messageRow}>
                     <Link to={`/profile/${msg.authorId}`} className={styles.messageAuthorLink} style={{ color: 'inherit', textDecoration: 'none' }}>
-                      <span className={styles.messageAuthor}>{msg.authorName}</span>
+                      <Avatar src={msg.authorAvatar} name={msg.authorName} size="sm" />
                     </Link>
-                    <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>
-                  </div>
-                  
-                  <div className={styles.messageBubble}>
-                    {msg.title && <div className={styles.messageTitle}>{msg.title}</div>}
-                    <div className={styles.messageContent}>{msg.content}</div>
 
-                    <div className={styles.messageActions}>
-                      <button 
-                        className={`${styles.actionBtn} ${hasLiked ? styles.actionBtnLiked : ''}`}
-                        onClick={() => handleLike(msg.id)}
-                      >
-                        <Heart size={12} fill={hasLiked ? 'currentColor' : 'none'} />
-                        {msg.likedBy?.length > 0 && msg.likedBy.length}
-                      </button>
-                      
-                      <button 
-                        className={styles.actionBtn}
-                        onClick={() => toggleThread(msg.id)}
-                      >
-                        <MessageSquare size={12} />
-                        {msg.commentCount > 0 && msg.commentCount}
-                      </button>
+                    <div className={styles.messageBody}>
+                      <div className={styles.messageMeta}>
+                        <Link to={`/profile/${msg.authorId}`} className={styles.messageAuthorLink} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          <span className={styles.messageAuthor}>{msg.authorName}</span>
+                        </Link>
+                        <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>
+                      </div>
 
-                      {canDelete && (
-                        <button 
-                          className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
-                          onClick={() => handleDelete(msg.id)}
-                          title={isAdmin && !isMine ? "Удалить как Admin" : "Удалить"}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
+                      <div className={styles.messageBubble}>
+                        {msg.title && <div className={styles.messageTitle}>{msg.title}</div>}
+                        <div className={styles.messageContent}>
+                          <LinkifiedText text={msg.content} />
+                        </div>
 
-                    {/* Тред (комменты) */}
-                    <AnimatePresence>
-                      {isThreadOpen && (
-                        <motion.div 
-                          className={styles.threadContainer}
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                        >
-                          {loadingComments[msg.id] ? (
-                            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Грузим ветку...</span>
-                          ) : loadedComments[msg.id]?.map(c => (
-                            <div key={c.id} className={styles.threadItem}>
-                              <Link to={`/profile/${c.authorId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                                <span className={styles.threadAuthor}>{c.authorName}:</span>
-                              </Link>
-                              <span className={styles.threadContent}>{c.content}</span>
-                            </div>
-                          ))}
+                        <div className={styles.messageActions}>
+                          <button
+                            className={`${styles.actionBtn} ${hasLiked ? styles.actionBtnLiked : ''}`}
+                            onClick={() => handleLike(msg.id)}
+                          >
+                            <Heart size={12} fill={hasLiked ? 'currentColor' : 'none'} />
+                            {msg.likedBy?.length > 0 && msg.likedBy.length}
+                          </button>
                           
-                          {user && (
-                            <div className={styles.threadInputRow}>
-                              <input 
-                                className={styles.threadInput}
-                                placeholder="Ответить в ветку..."
-                                value={threadInputs[msg.id] || ''}
-                                onChange={e => setThreadInputs(p => ({ ...p, [msg.id]: e.target.value }))}
-                                onKeyDown={e => e.key === 'Enter' && handleSendThreadMsg(msg.id)}
-                              />
-                              <button className={styles.threadSendBtn} onClick={() => handleSendThreadMsg(msg.id)}>
-                                <Reply size={12} />
-                              </button>
-                            </div>
+                          <button
+                            className={styles.actionBtn}
+                            onClick={() => toggleThread(msg.id)}
+                          >
+                            <MessageSquare size={12} />
+                            {msg.commentCount > 0 && msg.commentCount}
+                          </button>
+
+                          {canDelete && (
+                            <button
+                              className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
+                              onClick={() => handleDelete(msg.id)}
+                          title={canModerate && !isMine ? "Удалить как модератор" : "Удалить"}
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                        </div>
+
+                        {/* Тред (комменты) */}
+                        <AnimatePresence>
+                          {isThreadOpen && (
+                            <motion.div
+                              className={styles.threadContainer}
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                            >
+                              {loadingComments[msg.id] ? (
+                                <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Грузим ветку...</span>
+                              ) : loadedComments[msg.id]?.map(c => (
+                                <div key={c.id} className={styles.threadItem}>
+                                  <Link to={`/profile/${c.authorId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                    <span className={styles.threadAuthor}>{c.authorName}:</span>
+                                  </Link>
+                                  <span className={styles.threadContent}>
+                                    <LinkifiedText text={c.content} />
+                                  </span>
+                                </div>
+                              ))}
+
+                              {user && (
+                                <div className={styles.threadInputRow}>
+                                  <input
+                                    className={styles.threadInput}
+                                    placeholder="Ответить в ветку..."
+                                    value={threadInputs[msg.id] || ''}
+                                    onChange={e => setThreadInputs(p => ({ ...p, [msg.id]: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && handleSendThreadMsg(msg.id)}
+                                  />
+                                  <button className={styles.threadSendBtn} onClick={() => handleSendThreadMsg(msg.id)}>
+                                    <Reply size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )

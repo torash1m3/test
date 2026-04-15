@@ -14,11 +14,47 @@ import {
   signOut as firebaseSignOut,
   updateProfile,
 } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import useBuilderStore from './builderStore'
 
 const googleProvider = new GoogleAuthProvider()
+const ALLOWED_ROLES = ['user', 'moderator', 'admin']
+
+function buildPrivateProfile(firebaseUser, overrides = {}) {
+  const displayName = overrides.displayName ?? firebaseUser.displayName ?? ''
+  const avatarUrl = overrides.avatarUrl ?? firebaseUser.photoURL ?? ''
+  const now = new Date().toISOString()
+
+  return {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName,
+    nickname: overrides.nickname ?? displayName,
+    avatarUrl,
+    pcSpecs: overrides.pcSpecs ?? '',
+    bio: overrides.bio ?? '',
+    socialLinks: overrides.socialLinks ?? { telegram: '', vk: '' },
+    role: overrides.role ?? 'user',
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: now,
+  }
+}
+
+function toPublicProfile(profile) {
+  return {
+    uid: profile.uid,
+    displayName: profile.displayName || '',
+    nickname: profile.nickname || profile.displayName || '',
+    avatarUrl: profile.avatarUrl || '',
+    pcSpecs: profile.pcSpecs || '',
+    bio: profile.bio || '',
+    socialLinks: profile.socialLinks || { telegram: '', vk: '' },
+    role: profile.role || 'user',
+    createdAt: profile.createdAt || new Date().toISOString(),
+    updatedAt: profile.updatedAt || new Date().toISOString(),
+  }
+}
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -34,6 +70,10 @@ const useAuthStore = create((set, get) => ({
     onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const profile = await get().fetchProfile(firebaseUser.uid)
+        if (profile) {
+          await get().syncPublicProfile(profile)
+        }
+
         set({
           user: {
             uid: firebaseUser.uid,
@@ -74,20 +114,50 @@ const useAuthStore = create((set, get) => ({
   },
 
   /**
+   * Загрузить публичный профиль без приватных полей.
+   */
+  fetchPublicProfile: async (uid) => {
+    try {
+      const snap = await getDoc(doc(db, 'publicProfiles', uid))
+      if (snap.exists()) {
+        return snap.data()
+      }
+      return null
+    } catch {
+      return null
+    }
+  },
+
+  /**
+   * Синхронизировать безопасную публичную карточку профиля.
+   */
+  syncPublicProfile: async (profile) => {
+    if (!profile?.uid) return
+    await setDoc(doc(db, 'publicProfiles', profile.uid), toPublicProfile(profile), { merge: true })
+  },
+
+  /**
    * Создать/обновить профиль в Firestore
    */
   saveProfile: async (profileData) => {
     const { user } = get()
     if (!user) return
 
+    const currentProfile = get().profile || {}
     const data = {
+      ...currentProfile,
       ...profileData,
       uid: user.uid,
       email: user.email,
+      role: currentProfile.role || 'user',
+      createdAt: currentProfile.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
 
-    await setDoc(doc(db, 'users', user.uid), data, { merge: true })
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'users', user.uid), data, { merge: true })
+    batch.set(doc(db, 'publicProfiles', user.uid), toPublicProfile(data), { merge: true })
+    await batch.commit()
     set({ profile: { ...get().profile, ...data } })
   },
 
@@ -95,8 +165,15 @@ const useAuthStore = create((set, get) => ({
    * Обновить роль пользователя (только для админов)
    */
   updateUserRole: async (targetUid, newRole) => {
+    if (!ALLOWED_ROLES.includes(newRole)) return false
     try {
-      await setDoc(doc(db, 'users', targetUid), { role: newRole }, { merge: true })
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'users', targetUid), { role: newRole }, { merge: true })
+      const publicProfile = await getDoc(doc(db, 'publicProfiles', targetUid))
+      if (publicProfile.exists()) {
+        batch.set(doc(db, 'publicProfiles', targetUid), { role: newRole }, { merge: true })
+      }
+      await batch.commit()
       return true
     } catch (e) {
       console.error('Ошибка обновления роли:', e)
@@ -119,20 +196,13 @@ const useAuthStore = create((set, get) => ({
       // Установить displayName
       await updateProfile(firebaseUser, { displayName })
 
-      // Создать профиль в Firestore
-      await setDoc(doc(db, 'users', firebaseUser.uid), {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
+      const privateProfile = buildPrivateProfile(firebaseUser, {
         displayName,
         nickname: displayName,
         avatarUrl: '',
-        pcSpecs: '',
-        bio: '',
-        socialLinks: { telegram: '', vk: '' },
-        role: 'user',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       })
+      await setDoc(doc(db, 'users', firebaseUser.uid), privateProfile)
+      await setDoc(doc(db, 'publicProfiles', firebaseUser.uid), toPublicProfile(privateProfile))
 
       return { success: true }
     } catch (error) {
@@ -169,19 +239,11 @@ const useAuthStore = create((set, get) => ({
       // Создать профиль в Firestore если не существует
       const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
       if (!snap.exists()) {
-        await setDoc(doc(db, 'users', firebaseUser.uid), {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName || '',
-          nickname: firebaseUser.displayName || '',
-          avatarUrl: firebaseUser.photoURL || '',
-          pcSpecs: '',
-          bio: '',
-          socialLinks: { telegram: '', vk: '' },
-          role: 'user',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
+        const privateProfile = buildPrivateProfile(firebaseUser)
+        await setDoc(doc(db, 'users', firebaseUser.uid), privateProfile)
+        await setDoc(doc(db, 'publicProfiles', firebaseUser.uid), toPublicProfile(privateProfile))
+      } else {
+        await get().syncPublicProfile(snap.data())
       }
 
       return { success: true }

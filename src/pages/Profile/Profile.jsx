@@ -8,7 +8,7 @@ import styles from './Profile.module.css'
 
 export default function ProfilePage() {
   const { id } = useParams()
-  const { user, profile: myProfile, loading: authLoading, signOut, saveProfile, fetchProfile, updateUserRole } = useAuthStore()
+  const { user, profile: myProfile, loading: authLoading, signOut, saveProfile, fetchPublicProfile, updateUserRole } = useAuthStore()
   const isAuthenticated = !!user
   const navigate = useNavigate()
 
@@ -36,13 +36,13 @@ export default function ProfilePage() {
     }
 
     let isMounted = true
-    fetchProfile(id).then(data => {
+    fetchPublicProfile(id).then(data => {
       if (isMounted) {
         setFetchedProfile({ id, data })
       }
     })
     return () => { isMounted = false }
-  }, [id, authLoading, isMyProfile, fetchProfile])
+  }, [id, authLoading, isMyProfile, fetchPublicProfile])
 
   const loadingTarget = !isMyProfile && fetchedProfile.id !== id
   const targetProfile = isMyProfile
