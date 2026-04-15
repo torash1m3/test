@@ -10,6 +10,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // ══════════════════════════════════════════
     // Профили пользователей
     // ══════════════════════════════════════════
@@ -146,7 +150,7 @@ service cloud.firestore {
         isValidLikeUpdate() || isValidCommentCountUpdate()
       );
 
-      allow delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || isAdmin());
 
       // ── Подколлекция комментариев ──
       match /comments/{commentId} {
@@ -165,7 +169,7 @@ service cloud.firestore {
         allow update: if isSignedIn()
                       && request.auth.uid == resource.data.authorId
                       && request.resource.data.authorId == resource.data.authorId;
-        allow delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+        allow delete: if isSignedIn() && (request.auth.uid == resource.data.authorId || isAdmin());
       }
     }
   }
