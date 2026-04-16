@@ -11,11 +11,13 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // ИСПОЛЬЗУЕМ CUSTOM CLAIMS вместо медленных и дорогих get() запросов
+      return isSignedIn() && request.auth.token.role == 'admin';
     }
 
     function isModerator() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator';
+      // ИСПОЛЬЗУЕМ CUSTOM CLAIMS
+      return isSignedIn() && request.auth.token.role == 'moderator';
     }
 
     function canModerate() {
@@ -26,15 +28,18 @@ service cloud.firestore {
       return role == 'user' || role == 'moderator' || role == 'admin';
     }
 
-    function currentUserRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    function currentUserRole() {
+      return ('role' in request.auth.token) ? request.auth.token.role : 'user';
     }
 
+    // Проверяем обязательные поля через hasAll и необязательные через hasOnly
     function validProfilePayload(data) {
-      return data.keys().hasOnly([
-               'uid','email','displayName','nickname','avatarUrl',
-               'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
-             ])
+      let requiredFields = [
+        'uid','email','displayName','nickname','avatarUrl',
+        'pcSpecs','bio','socialLinks','role','createdAt','updatedAt'
+      ];
+      return data.keys().hasAll(requiredFields)
+             && data.keys().hasOnly(requiredFields)
              && data.uid is string
              && data.email is string
              && data.displayName is string
@@ -54,10 +59,12 @@ service cloud.firestore {
     }
 
     function validPublicProfilePayload(data) {
-      return data.keys().hasOnly([
-               'uid','displayName','nickname','avatarUrl',
-               'pcSpecs','bio','role','socialLinks','createdAt','updatedAt'
-             ])
+      let requiredFields = [
+        'uid','displayName','nickname','avatarUrl',
+        'pcSpecs','bio','role','socialLinks','createdAt','updatedAt'
+      ];
+      return data.keys().hasAll(requiredFields)
+             && data.keys().hasOnly(requiredFields)
              && data.uid is string
              && data.displayName is string
              && data.nickname is string
@@ -111,7 +118,7 @@ service cloud.firestore {
       allow create: if isOwner(userId)
                     && validPublicProfilePayload(request.resource.data)
                     && request.resource.data.uid == userId
-                    && request.resource.data.role == currentUserRole(userId);
+                    && request.resource.data.role == currentUserRole();
 
       allow update: if (
                       isOwner(userId)
@@ -151,6 +158,10 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid || canModerate()
       );
       allow create: if isSignedIn()
+                    && request.resource.data.keys().hasAll([
+                      'componentName','category','description','status',
+                      'authorId','authorName','createdAt'
+                    ])
                     && request.resource.data.keys().hasOnly([
                       'componentName','category','description','status',
                       'authorId','authorName','createdAt'
@@ -191,6 +202,7 @@ service cloud.firestore {
                && request.resource.data.likedBy is list
                && request.resource.data.likedBy.size() <= 1000
                && (
+                 // Обработка arrayUnion() на клиенте (добавление лайка)
                  (
                    !resource.data.likedBy.hasAny([request.auth.uid])
                    && request.resource.data.likedBy.size() == resource.data.likedBy.size() + 1
@@ -198,6 +210,7 @@ service cloud.firestore {
                    && request.resource.data.likedBy.hasAll([request.auth.uid])
                  )
                  ||
+                 // Обработка arrayRemove() на клиенте (удаление лайка)
                  (
                    resource.data.likedBy.hasAny([request.auth.uid])
                    && !request.resource.data.likedBy.hasAny([request.auth.uid])
@@ -208,6 +221,7 @@ service cloud.firestore {
       }
 
       function isValidCommentCountUpdate() {
+        // Подтверждение вызова FieldValue.increment(1) со стороны клиента
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount'])
                && request.resource.data.commentCount == resource.data.commentCount + 1;
       }
@@ -215,7 +229,7 @@ service cloud.firestore {
       allow read: if true;
 
       allow create: if isSignedIn()
-                    && request.resource.data.keys().hasOnly([
+                    && request.resource.data.keys().hasAll([
                       'section','title','content','authorId','authorName',
                       'authorAvatar','commentCount','likedBy','createdAt'
                     ])
@@ -235,7 +249,6 @@ service cloud.firestore {
                     && request.resource.data.likedBy.size() == 0
                     && request.resource.data.commentCount == 0;
 
-      // Пока разрешаем только безопасные обновления интеракций.
       allow update: if isSignedIn() && (
         isValidLikeUpdate() || isValidCommentCountUpdate()
       );
@@ -246,7 +259,7 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isSignedIn()
-                      && request.resource.data.keys().hasOnly([
+                      && request.resource.data.keys().hasAll([
                         'content','authorId','authorName','authorAvatar','createdAt'
                       ])
                       && request.resource.data.authorId == request.auth.uid

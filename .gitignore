@@ -41,3 +41,5 @@ Thumbs.db
 .qwen
 .windsurf
 
+# Firebase Admin Keys
+serviceAccountKey.json

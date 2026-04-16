@@ -9,13 +9,13 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBCmAGANJho5bJ_FqOtyog2dojNZbjOvSQ',
-  authDomain: 'neoforge-38813.firebaseapp.com',
-  projectId: 'neoforge-38813',
-  storageBucket: 'neoforge-38813.firebasestorage.app',
-  messagingSenderId: '537628188345',
-  appId: '1:537628188345:web:234639c7651c257cde4568',
-  measurementId: 'G-PXEK7W3HVS',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
 const app = initializeApp(firebaseConfig)
