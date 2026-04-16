@@ -13,22 +13,59 @@ import {
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   updateProfile,
+  User as FirebaseUser,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import useBuilderStore from './builderStore'
 
 const googleProvider = new GoogleAuthProvider()
-const ALLOWED_ROLES = ['user', 'moderator', 'admin']
+const ALLOWED_ROLES = ['user', 'moderator', 'admin'] as const;
+export type Role = typeof ALLOWED_ROLES[number];
 
-function buildPrivateProfile(firebaseUser, overrides = {}) {
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  nickname: string;
+  avatarUrl: string;
+  pcSpecs: string;
+  bio: string;
+  socialLinks: { telegram: string; vk: string };
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicProfile extends Omit<UserProfile, 'email'> {}
+
+interface AuthState {
+  user: { uid: string; email: string | null; displayName: string | null; photoURL: string | null } | null;
+  profile: UserProfile | null;
+  loading: boolean;
+  error: string | null;
+
+  init: () => void;
+  fetchProfile: (uid: string) => Promise<UserProfile | null>;
+  fetchPublicProfile: (uid: string) => Promise<PublicProfile | null>;
+  syncPublicProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  saveProfile: (profileData: Partial<UserProfile>) => Promise<void>;
+  updateUserRole: (targetUid: string, newRole: Role) => Promise<boolean>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signOut: () => Promise<void>;
+  clearError: () => void;
+}
+
+function buildPrivateProfile(firebaseUser: FirebaseUser, overrides: Partial<UserProfile> = {}): UserProfile {
   const displayName = overrides.displayName ?? firebaseUser.displayName ?? ''
   const avatarUrl = overrides.avatarUrl ?? firebaseUser.photoURL ?? ''
   const now = new Date().toISOString()
 
   return {
     uid: firebaseUser.uid,
-    email: firebaseUser.email,
+    email: firebaseUser.email || '',
     displayName,
     nickname: overrides.nickname ?? displayName,
     avatarUrl,
@@ -41,9 +78,9 @@ function buildPrivateProfile(firebaseUser, overrides = {}) {
   }
 }
 
-function toPublicProfile(profile) {
+function toPublicProfile(profile: UserProfile | Partial<UserProfile>): PublicProfile {
   return {
-    uid: profile.uid,
+    uid: profile.uid || '',
     displayName: profile.displayName || '',
     nickname: profile.nickname || profile.displayName || '',
     avatarUrl: profile.avatarUrl || '',
@@ -56,16 +93,12 @@ function toPublicProfile(profile) {
   }
 }
 
-const useAuthStore = create((set, get) => ({
+const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   loading: true,
   error: null,
 
-  /**
-   * Инициализация — слушатель состояния авторизации.
-   * Вызывается один раз при старте приложения.
-   */
   init: () => {
     onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -86,8 +119,6 @@ const useAuthStore = create((set, get) => ({
           error: null,
         })
 
-        // Синхронизация сборок с Firestore
-        // Сначала подписка — snapshot подхватит данные после миграции автоматически
         const builder = useBuilderStore.getState()
         builder.subscribeToBuilds(firebaseUser.uid)
         await builder.migrateLocalBuilds(firebaseUser.uid)
@@ -98,14 +129,11 @@ const useAuthStore = create((set, get) => ({
     })
   },
 
-  /**
-   * Загрузить профиль из Firestore
-   */
-  fetchProfile: async (uid) => {
+  fetchProfile: async (uid: string) => {
     try {
       const snap = await getDoc(doc(db, 'users', uid))
       if (snap.exists()) {
-        return snap.data()
+        return snap.data() as UserProfile
       }
       return null
     } catch {
@@ -113,14 +141,11 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Загрузить публичный профиль без приватных полей.
-   */
-  fetchPublicProfile: async (uid) => {
+  fetchPublicProfile: async (uid: string) => {
     try {
       const snap = await getDoc(doc(db, 'publicProfiles', uid))
       if (snap.exists()) {
-        return snap.data()
+        return snap.data() as PublicProfile
       }
       return null
     } catch {
@@ -128,27 +153,21 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Синхронизировать безопасную публичную карточку профиля.
-   */
-  syncPublicProfile: async (profile) => {
+  syncPublicProfile: async (profile: Partial<UserProfile>) => {
     if (!profile?.uid) return
     await setDoc(doc(db, 'publicProfiles', profile.uid), toPublicProfile(profile), { merge: true })
   },
 
-  /**
-   * Создать/обновить профиль в Firestore
-   */
-  saveProfile: async (profileData) => {
+  saveProfile: async (profileData: Partial<UserProfile>) => {
     const { user } = get()
     if (!user) return
 
-    const currentProfile = get().profile || {}
-    const data = {
+    const currentProfile = get().profile || {} as UserProfile
+    const data: UserProfile = {
       ...currentProfile,
       ...profileData,
       uid: user.uid,
-      email: user.email,
+      email: user.email || '',
       role: currentProfile.role || 'user',
       createdAt: currentProfile.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -158,13 +177,10 @@ const useAuthStore = create((set, get) => ({
     batch.set(doc(db, 'users', user.uid), data, { merge: true })
     batch.set(doc(db, 'publicProfiles', user.uid), toPublicProfile(data), { merge: true })
     await batch.commit()
-    set({ profile: { ...get().profile, ...data } })
+    set({ profile: { ...get().profile, ...data } as UserProfile })
   },
 
-  /**
-   * Обновить роль пользователя (только для админов)
-   */
-  updateUserRole: async (targetUid, newRole) => {
+  updateUserRole: async (targetUid: string, newRole: Role) => {
     if (!ALLOWED_ROLES.includes(newRole)) return false
     try {
       const batch = writeBatch(db)
@@ -181,9 +197,6 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Регистрация по Email/Password
-   */
   signUp: async (email, password, displayName) => {
     set({ loading: true, error: null })
     try {
@@ -193,7 +206,6 @@ const useAuthStore = create((set, get) => ({
         password
       )
 
-      // Установить displayName
       await updateProfile(firebaseUser, { displayName })
 
       const privateProfile = buildPrivateProfile(firebaseUser, {
@@ -205,58 +217,48 @@ const useAuthStore = create((set, get) => ({
       await setDoc(doc(db, 'publicProfiles', firebaseUser.uid), toPublicProfile(privateProfile))
 
       return { success: true }
-    } catch (error) {
+    } catch (error: any) {
       const message = getErrorMessage(error.code)
       set({ error: message, loading: false })
       return { success: false, error: message }
     }
   },
 
-  /**
-   * Вход по Email/Password
-   */
   signIn: async (email, password) => {
     set({ loading: true, error: null })
     try {
       await signInWithEmailAndPassword(auth, email, password)
       return { success: true }
-    } catch (error) {
+    } catch (error: any) {
       const message = getErrorMessage(error.code)
       set({ error: message, loading: false })
       return { success: false, error: message }
     }
   },
 
-  /**
-   * Вход через Google
-   */
   signInWithGoogle: async () => {
     set({ loading: true, error: null })
     try {
       const result = await signInWithPopup(auth, googleProvider)
       const firebaseUser = result.user
 
-      // Создать профиль в Firestore если не существует
       const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
       if (!snap.exists()) {
         const privateProfile = buildPrivateProfile(firebaseUser)
         await setDoc(doc(db, 'users', firebaseUser.uid), privateProfile)
         await setDoc(doc(db, 'publicProfiles', firebaseUser.uid), toPublicProfile(privateProfile))
       } else {
-        await get().syncPublicProfile(snap.data())
+        await get().syncPublicProfile(snap.data() as UserProfile)
       }
 
       return { success: true }
-    } catch (error) {
+    } catch (error: any) {
       const message = getErrorMessage(error.code)
       set({ error: message, loading: false })
       return { success: false, error: message }
     }
   },
 
-  /**
-   * Выход
-   */
   signOut: async () => {
     useBuilderStore.getState().unsubscribeFromBuilds()
     await firebaseSignOut(auth)
@@ -266,11 +268,8 @@ const useAuthStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 }))
 
-/**
- * Человекочитаемые ошибки
- */
-function getErrorMessage(code) {
-  const map = {
+function getErrorMessage(code: string): string {
+  const map: Record<string, string> = {
     'auth/email-already-in-use': 'Этот email уже зарегистрирован',
     'auth/invalid-email': 'Некорректный email',
     'auth/weak-password': 'Пароль слишком слабый (мин. 6 символов)',

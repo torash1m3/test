@@ -17,10 +17,62 @@ import {
 import { db } from '@/lib/firebase'
 import { CATEGORY_SCHEMAS } from '@/features/builder/schemas'
 
-const COMPONENT_STATUSES = ['planned', 'ordered', 'purchased', 'delivered']
+export type ComponentStatus = 'planned' | 'ordered' | 'purchased' | 'delivered';
+
+export interface Component {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  status: ComponentStatus;
+  notes: string;
+  attrs: Record<string, any>;
+  addedAt: string;
+}
+
+export interface Build {
+  id: string;
+  name: string;
+  components: Component[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BuilderState {
+  builds: Build[];
+  activeBuildId: string | null;
+  _uid: string | null;
+  _unsubscribe: (() => void) | null;
+  categories: string[];
+  categoryLabels: Record<string, string>;
+
+  subscribeToBuilds: (uid: string | null) => void;
+  unsubscribeFromBuilds: () => void;
+  migrateLocalBuilds: (uid: string) => Promise<void>;
+
+  createBuild: (name: string) => string;
+  deleteBuild: (buildId: string) => void;
+  renameBuild: (buildId: string, name: string) => void;
+  setActiveBuild: (buildId: string | null) => void;
+
+  _saveCurrent: (buildId: string) => void;
+  addComponent: (buildId: string, component: any) => string;
+  updateComponent: (buildId: string, componentId: string, updates: Partial<Component>) => void;
+  removeComponent: (buildId: string, componentId: string) => void;
+  setComponentStatus: (buildId: string, componentId: string, newStatus: ComponentStatus) => void;
+
+  getActiveBuild: () => Build | null;
+  getComponentsByCategory: (buildId: string, category: string) => Component[];
+  getTotalPrice: (buildId: string) => number;
+  getCategoryPrice: (buildId: string, category: string) => number;
+  getProgress: (buildId: string) => number;
+  getStatusCounts: (buildId: string) => Record<string, number>;
+}
+
+const COMPONENT_STATUSES: ComponentStatus[] = ['planned', 'ordered', 'purchased', 'delivered']
 
 /** Вес статуса для прогресс-бара */
-const STATUS_WEIGHT = {
+const STATUS_WEIGHT: Record<ComponentStatus, number> = {
   planned: 0,
   ordered: 0.25,
   purchased: 0.5,
@@ -29,10 +81,7 @@ const STATUS_WEIGHT = {
 
 const CATEGORIES = Object.keys(CATEGORY_SCHEMAS)
 
-/**
- * Сохранить сборку в Firestore
- */
-async function saveBuildToFirestore(uid, build) {
+async function saveBuildToFirestore(uid: string, build: Build) {
   if (!uid) return
   try {
     await setDoc(doc(db, 'users', uid, 'builds', build.id), build)
@@ -41,10 +90,7 @@ async function saveBuildToFirestore(uid, build) {
   }
 }
 
-/**
- * Удалить сборку из Firestore
- */
-async function deleteBuildFromFirestore(uid, buildId) {
+async function deleteBuildFromFirestore(uid: string, buildId: string) {
   if (!uid) return
   try {
     await deleteDoc(doc(db, 'users', uid, 'builds', buildId))
@@ -53,7 +99,7 @@ async function deleteBuildFromFirestore(uid, buildId) {
   }
 }
 
-const useBuilderStore = create(
+const useBuilderStore = create<BuilderState>()(
   persist(
     (set, get) => ({
       builds: [],
@@ -64,17 +110,12 @@ const useBuilderStore = create(
       categories: CATEGORIES,
 
       categoryLabels: Object.fromEntries(
-        CATEGORIES.map((key) => [key, CATEGORY_SCHEMAS[key].label])
+        CATEGORIES.map((key) => [key, (CATEGORY_SCHEMAS as any)[key].label])
       ),
 
       // ──── Firestore Sync ────
 
-      /**
-       * Подписаться на сборки пользователя в Firestore.
-       * Вызывается из authStore при логине.
-       */
-      subscribeToBuilds: (uid) => {
-        // Отписаться от предыдущего
+      subscribeToBuilds: (uid: string | null) => {
         const prev = get()._unsubscribe
         if (prev) prev()
 
@@ -84,9 +125,13 @@ const useBuilderStore = create(
         }
 
         const ref = collection(db, 'users', uid, 'builds')
-        const unsubscribe = onSnapshot(ref, (snapshot) => {
-          const builds = snapshot.docs.map((d) => d.data())
-          // Сортировка по дате создания
+        
+        // Подписываемся с includeMetadataChanges, чтобы ловить hasPendingWrites
+        const unsubscribe = onSnapshot(ref, { includeMetadataChanges: true }, (snapshot) => {
+          // Игнорируем локальные (оптимистичные) изменения чтобы UI не "моргал"
+          if (snapshot.metadata.hasPendingWrites) return;
+
+          const builds = snapshot.docs.map((d) => d.data() as Build)
           builds.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
           set({ builds })
         })
@@ -94,31 +139,22 @@ const useBuilderStore = create(
         set({ _uid: uid, _unsubscribe: unsubscribe })
       },
 
-      /**
-       * Отписаться (при логауте)
-       */
       unsubscribeFromBuilds: () => {
         const unsub = get()._unsubscribe
         if (unsub) unsub()
         set({ builds: [], activeBuildId: null, _uid: null, _unsubscribe: null })
       },
 
-      /**
-       * Мигрировать локальные сборки в Firestore (с умным слиянием)
-       */
-      migrateLocalBuilds: async (uid) => {
+      migrateLocalBuilds: async (uid: string) => {
         const { builds } = get()
         if (builds.length === 0) return
 
-        // Загрузить облачные сборки
         const ref = collection(db, 'users', uid, 'builds')
         const snapshot = await getDocs(ref)
-        const cloudBuilds = snapshot.docs.map(d => d.data())
+        const cloudBuilds = snapshot.docs.map(d => d.data() as Build)
         const cloudNames = new Set(cloudBuilds.map(b => b.name))
 
-        // Мигрировать
         for (const localBuild of builds) {
-          // Если сборка с таким ID уже есть в облаке — пропускаем (уже смигрирована)
           if (cloudBuilds.some(cb => cb.id === localBuild.id)) continue
 
           let newName = localBuild.name
@@ -133,15 +169,13 @@ const useBuilderStore = create(
           cloudNames.add(newName)
         }
 
-        // Очистить локальные сборки после успешной миграции,
-        // чтобы они не висели мертвым грузом в localStorage (они теперь в облаке).
         set({ builds: [], activeBuildId: null })
       },
 
       // ──── Build CRUD ────
-      createBuild: (name) => {
+      createBuild: (name: string) => {
         const uid = get()._uid
-        const build = {
+        const build: Build = {
           id: crypto.randomUUID(),
           name,
           components: [],
@@ -152,44 +186,46 @@ const useBuilderStore = create(
           builds: [...state.builds, build],
           activeBuildId: build.id,
         }))
-        saveBuildToFirestore(uid, build)
+        if (uid) saveBuildToFirestore(uid, build)
         return build.id
       },
 
-      deleteBuild: (buildId) => {
+      deleteBuild: (buildId: string) => {
         const uid = get()._uid
         set((state) => ({
           builds: state.builds.filter((b) => b.id !== buildId),
           activeBuildId:
             state.activeBuildId === buildId ? null : state.activeBuildId,
         }))
-        deleteBuildFromFirestore(uid, buildId)
+        if (uid) deleteBuildFromFirestore(uid, buildId)
       },
 
-      renameBuild: (buildId, name) => {
+      renameBuild: (buildId: string, name: string) => {
         const uid = get()._uid
         set((state) => ({
           builds: state.builds.map((b) =>
             b.id === buildId ? { ...b, name, updatedAt: new Date().toISOString() } : b
           ),
         }))
+        if (!uid) return;
         const build = get().builds.find((b) => b.id === buildId)
         if (build) saveBuildToFirestore(uid, build)
       },
 
-      setActiveBuild: (buildId) => {
+      setActiveBuild: (buildId: string | null) => {
         set({ activeBuildId: buildId })
       },
 
       // ──── Component CRUD (+ auto-save) ────
-      _saveCurrent: (buildId) => {
+      _saveCurrent: (buildId: string) => {
         const uid = get()._uid
+        if (!uid) return;
         const build = get().builds.find((b) => b.id === buildId)
         if (build) saveBuildToFirestore(uid, build)
       },
 
-      addComponent: (buildId, component) => {
-        const newComponent = {
+      addComponent: (buildId: string, component: any) => {
+        const newComponent: Component = {
           id: crypto.randomUUID(),
           name: component.name,
           category: component.category,
@@ -214,7 +250,7 @@ const useBuilderStore = create(
         return newComponent.id
       },
 
-      updateComponent: (buildId, componentId, updates) => {
+      updateComponent: (buildId: string, componentId: string, updates: Partial<Component>) => {
         set((state) => ({
           builds: state.builds.map((b) =>
             b.id === buildId
@@ -231,7 +267,7 @@ const useBuilderStore = create(
         get()._saveCurrent(buildId)
       },
 
-      removeComponent: (buildId, componentId) => {
+      removeComponent: (buildId: string, componentId: string) => {
         set((state) => ({
           builds: state.builds.map((b) =>
             b.id === buildId
@@ -246,10 +282,7 @@ const useBuilderStore = create(
         get()._saveCurrent(buildId)
       },
 
-      /**
-       * Установить конкретный статус компонента (вместо цикличного переключения)
-       */
-      setComponentStatus: (buildId, componentId, newStatus) => {
+      setComponentStatus: (buildId: string, componentId: string, newStatus: ComponentStatus) => {
         if (!COMPONENT_STATUSES.includes(newStatus)) return
         set((state) => ({
           builds: state.builds.map((b) => {
@@ -273,19 +306,19 @@ const useBuilderStore = create(
         return state.builds.find((b) => b.id === state.activeBuildId) || null
       },
 
-      getComponentsByCategory: (buildId, category) => {
+      getComponentsByCategory: (buildId: string, category: string) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build) return []
         return build.components.filter((c) => c.category === category)
       },
 
-      getTotalPrice: (buildId) => {
+      getTotalPrice: (buildId: string) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build) return 0
         return build.components.reduce((sum, c) => sum + (c.price || 0), 0)
       },
 
-      getCategoryPrice: (buildId, category) => {
+      getCategoryPrice: (buildId: string, category: string) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build) return 0
         return build.components
@@ -293,11 +326,7 @@ const useBuilderStore = create(
           .reduce((sum, c) => sum + (c.price || 0), 0)
       },
 
-      /**
-       * Прогресс сборки — взвешенный по статусам.
-       * planned=0%, ordered=25%, purchased=50%, delivered=100%
-       */
-      getProgress: (buildId) => {
+      getProgress: (buildId: string) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build || build.components.length === 0) return 0
         const totalWeight = build.components.reduce(
@@ -307,10 +336,10 @@ const useBuilderStore = create(
         return Math.round((totalWeight / build.components.length) * 100)
       },
 
-      getStatusCounts: (buildId) => {
+      getStatusCounts: (buildId: string) => {
         const build = get().builds.find((b) => b.id === buildId)
         if (!build) return { planned: 0, ordered: 0, purchased: 0, delivered: 0 }
-        const counts = { planned: 0, ordered: 0, purchased: 0, delivered: 0 }
+        const counts: Record<string, number> = { planned: 0, ordered: 0, purchased: 0, delivered: 0 }
         for (const c of build.components) {
           counts[c.status] = (counts[c.status] || 0) + 1
         }
@@ -319,7 +348,7 @@ const useBuilderStore = create(
     }),
     {
       name: 'neoforge-builder',
-      // Не сохраняем служебные поля в localStorage
+      // @ts-ignore Ignore type for partialize due to standard zustand persist typings issue
       partialize: (state) => ({
         builds: state.builds,
         activeBuildId: state.activeBuildId,

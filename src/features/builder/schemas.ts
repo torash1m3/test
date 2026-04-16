@@ -240,27 +240,32 @@ export const CATEGORY_SCHEMAS = {
   },
 }
 
+export type CategoryKey = keyof typeof CATEGORY_SCHEMAS;
+
 /**
  * Получить атрибуты для категории
  */
-export function getSchemaForCategory(category) {
-  return CATEGORY_SCHEMAS[category] || { label: category, attrs: [] }
+export function getSchemaForCategory(category: string) {
+  if (category in CATEGORY_SCHEMAS) {
+    return CATEGORY_SCHEMAS[category as CategoryKey];
+  }
+  return { label: category, attrs: [] };
 }
 
 /**
  * Получить пустой объект attrs для категории
  */
-export function getEmptyAttrs(category) {
-  const schema = getSchemaForCategory(category)
-  const attrs = {}
+export function getEmptyAttrs(category: string) {
+  const schema = getSchemaForCategory(category);
+  const attrs: Record<string, any> = {};
   for (const attr of schema.attrs) {
     if (attr.type === 'multiselect') {
-      attrs[attr.key] = []
+      attrs[attr.key] = [];
     } else if (attr.type === 'number') {
-      attrs[attr.key] = ''
+      attrs[attr.key] = '';
     } else {
-      attrs[attr.key] = ''
+      attrs[attr.key] = '';
     }
   }
-  return attrs
+  return attrs;
 }
